@@ -1,5 +1,14 @@
 ﻿function global:Enable-CsVirtualTerminal {
     if ($null -ne $script:CsVtOk) { return $script:CsVtOk }
+
+    if ($env:NO_COLOR) {
+        $script:CsVtOk = $false
+        return $false
+    }
+    if ($PSStyle -and $Host.UI.SupportsVirtualTerminal -and $PSStyle.OutputRendering -eq 'PlainText') {
+        try { $PSStyle.OutputRendering = 'Host' } catch { }
+    }
+
     if ($PSVersionTable.PSVersion.Major -ge 7 -or $env:WT_SESSION) {
         $script:CsVtOk = $true
         return $true

@@ -20,6 +20,10 @@ $APP_NAME      = 'Cyber-Scopolamine'
 $SLUG          = 'cyber-scopolamine'
 
 function Enable-VirtualTerminal {
+    if ($env:NO_COLOR) { return $false }
+    if ($PSStyle -and $Host.UI.SupportsVirtualTerminal -and $PSStyle.OutputRendering -eq 'PlainText') {
+        try { $PSStyle.OutputRendering = 'Host' } catch { }
+    }
     if ($PSVersionTable.PSVersion.Major -ge 7 -or $env:WT_SESSION) { return $true }
     try {
         if (-not ('Cs.Vt' -as [type])) {
