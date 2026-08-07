@@ -1,0 +1,48 @@
+--- a/aider/commands.py
++++ b/aider/commands.py
+@@ -84,11 +84,30 @@
+         # Store the original read-only filenames provided via args.read
+         self.original_read_only_fnames = set(original_read_only_fnames or [])
+ 
++    def _local_model_aliases(self):
++        # Aliases actually backed by a local Ollama model, as opposed to aider's
++        # own built-in cloud aliases (sonnet/opus/haiku/etc.) or litellm's full
++        # cloud catalog — neither is usable on an offline, no-API-key box.
++        return {
++            alias: target
++            for alias, target in models.MODEL_ALIASES.items()
++            if target.startswith("ollama_chat/") or target.startswith("ollama/")
++        }
++
+     def cmd_model(self, args):
+         "Switch the Main Model to a new LLM"
+ 
+         model_name = args.strip()
+         if not model_name:
++            current = self.coder.main_model.name
++            local_aliases = self._local_model_aliases()
++            if local_aliases:
++                self.io.tool_output("Available local model aliases:")
++                for alias, target in sorted(local_aliases.items()):
++                    marker = "*" if target == current else " "
++                    self.io.tool_output(f"  {marker} {alias:<20} -> {target}")
++                self.io.tool_output("Switch with: /model <alias>")
++                self.io.tool_output()
+             announcements = "\n".join(self.coder.get_announcements())
+             self.io.tool_output(announcements)
+             return
+@@ -203,8 +222,12 @@
+         )
+ 
+     def completions_model(self):
+-        models = litellm.model_cost.keys()
+-        return models
++        # Commands.get_completions() sorts whatever this returns, so mixing in
++        # litellm's ~3000 cloud model names (or even aider's own ~20 built-in
++        # cloud aliases like sonnet/opus/haiku) just buries the handful of real,
++        # usable options. Full cloud catalog search is still available via
++        # `/models <search>`.
++        return list(self._local_model_aliases().keys())
+ 
+     def cmd_models(self, args):
+         "Search the list of available models"

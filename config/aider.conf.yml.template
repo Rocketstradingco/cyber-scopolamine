@@ -1,0 +1,37 @@
+# RTCO Local Agent - aider configuration.
+#
+# Scoped to this sandbox folder rather than your home directory on purpose, so
+# it does not hijack any other aider use on this machine. aider reads the
+# config from the current directory / git root before falling back to ~.
+#
+# The model below is the "-agent" variant the installer built: identical
+# weights to the stock model, rebuilt with a larger context window. Stock
+# Ollama defaults to a small context, which starves aider - its repo map alone
+# is budgeted at 4096 tokens before any of your file content is added.
+model: ollama_chat/{{MODEL}}
+
+show-release-notes: false
+check-update: false
+gui: false
+browser: false
+
+# Each launch starts fresh; the previous conversation is archived, not
+# restored. Browse or reload old ones with `rtco-aider-history`.
+restore-chat-history: true
+max-chat-history-tokens: 4096
+
+# Never auto-commit. These are small local models - review their changes
+# before they become permanent git history anywhere.
+auto-commits: false
+dirty-commits: false
+
+# Hot-swap models with `aider --model <alias>` or `/model <alias>` in a
+# session. Aliases pointing at models you have not pulled simply fail with a
+# model-not-found error, which is harmless - pull them with
+# `ollama pull <name>` and rebuild the -agent variant to enable them.
+alias:
+  - "uncensored-big:ollama_chat/{{MODEL}}"
+  - "coder:ollama_chat/qwen2.5-coder-agent:latest"
+  - "big:ollama_chat/qwen2.5-coder-7b-agent:latest"
+  - "uncensored:ollama_chat/qwen2.5-abliterate-agent:latest"
+  - "uncensored-coder:ollama_chat/qwen2.5-coder-abliterate-agent:latest"

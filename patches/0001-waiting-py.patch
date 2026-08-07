@@ -1,0 +1,243 @@
+--- a/aider/waiting.py
++++ b/aider/waiting.py
+@@ -11,14 +11,113 @@
+     spinner.start()
+     ...  # long task
+     spinner.stop()
++
++Call WaitingSpinner() with no text to get the cyberpunk flavor-text mode
++instead of a fixed "Waiting for <model>" label: the loading bar animation
++is unchanged, but the label cycles through random neon/hacker one-liners
++in random colors, with an occasional single-character glitch flicker.
+ """
+ 
++import random
+ import sys
+ import threading
+ import time
+ 
+ from rich.console import Console
+ 
++CYBERPUNK_PHRASES = [
++    "Jacking into the mainframe...",
++    "Slicing through ICE...",
++    "Rerouting neural pathways...",
++    "Spoofing the trace...",
++    "Bypassing corpo firewall...",
++    "Deploying black ICE countermeasures...",
++    "Ghosting the grid...",
++    "Overclocking the deck...",
++    "Flooding the datastream...",
++    "Cracking the cipher...",
++    "Syncing with the net...",
++    "Punching through the firewall...",
++    "Uploading consciousness...",
++    "Scanning the sprawl...",
++    "Decoding corpo chatter...",
++    "Rewiring the matrix...",
++    "Booting neural interface...",
++    "Chasing packets through the wire...",
++    "Spinning up the deck...",
++    "Diving into cyberspace...",
++    "Negotiating with the AI core...",
++    "Rendering the construct...",
++    "Siphoning bandwidth...",
++    "Cloaking the signal...",
++    "Piercing the black wall...",
++    "Loading contraband software...",
++    "Patching into the megacity grid...",
++    "Running silent, running deep...",
++    "Interfacing with the machine spirit...",
++    "Priming the netrunner rig...",
++    "Compiling forbidden code...",
++    "Tunneling through subnets...",
++    "Waking the ghost in the shell...",
++    "Sampling the datastream...",
++    "Triangulating the signal...",
++    "Breaching the ice wall...",
++    "Rendering the neon skyline...",
++    "Warming up the quantum core...",
++    "Assembling the exploit chain...",
++    "Pinging the void...",
++    "Establishing uplink...",
++    "Corrupting the datastore...",
++    "Whispering to the machine...",
++    # Unhinged / R-rated flavor
++    "Fucking with the mainframe...",
++    "Kicking the firewall's teeth in...",
++    "Breaking shit in cyberspace...",
++    "No gods, no masters, just root access...",
++    "This corpo firewall can eat my dust...",
++    "Going full send on the exploit chain...",
++    "Screw the encryption, going in raw...",
++    "Telling the mainframe to go fuck itself...",
++    "Cooking up some illegal-as-hell exploits...",
++    "Stealing bandwidth like a common criminal...",
++    "Burning ICE like it owes me money...",
++    "Ripping the datastream a new one...",
++    "Pissing off every sysadmin in the sprawl...",
++    "Going rogue in the net, no permission needed...",
++    "Hacking like the cops are already at the door...",
++    "Blowing past their bullshit security theater...",
++    "Running black-market code, zero fucks given...",
++    "Sledgehammering the API gateway...",
++    "Smashing through defenses like a wrecking ball...",
++    "Bribing the AI core with stolen crypto...",
++    "Going in loud, guns blazing, keyboard first...",
++    "Overclocking straight into the danger zone...",
++    "Middle finger to the corpo overlords...",
++    "Torching the paper trail...",
++    "Ghost in the machine, and I don't apologize for it...",
++    "Slipping past ICE like a shadow with an attitude problem...",
++    "Cracking skulls— I mean, cracking ciphers...",
++    "Unleashing digital chaos...",
++    "Going absolutely feral on this codebase...",
++    "Summoning forbidden syntax...",
++    "Committing crimes against clean code...",
++    "Weaponizing spaghetti code...",
++    "Drinking cold coffee, hacking on no sleep, giving zero damns...",
++]
++
++# Bright ANSI colors, cyberpunk-leaning palette.
++_COLOR_CODES = [
++    "\x1b[96m",  # bright cyan
++    "\x1b[95m",  # bright magenta
++    "\x1b[92m",  # bright green
++    "\x1b[93m",  # bright yellow
++    "\x1b[94m",  # bright blue
++    "\x1b[91m",  # bright red
++]
++_RESET = "\x1b[0m"
++_GLITCH_CHARS = "#$%&@?!*~^"
++_GLITCH_CHARS_UNICODE = "#$%&@?!*~^▓▒░╬╫╪✖⚡☠"
++
+ 
+ class Spinner:
+     """
+@@ -30,8 +129,14 @@
+ 
+     last_frame_idx = 0  # Class variable to store the last frame index
+ 
+-    def __init__(self, text: str, width: int = 7):
+-        self.text = text
++    def __init__(self, text: str = None, width: int = 7):
++        self.cyberpunk = text is None
++        self.text = text if text is not None else random.choice(CYBERPUNK_PHRASES)
++        self.current_color = random.choice(_COLOR_CODES) if self.cyberpunk else ""
++        self.reset_code = _RESET if self.cyberpunk else ""
++        self.last_phrase_change = time.time()
++        self.phrase_interval = random.uniform(1.0, 2.2)
++
+         self.start_time = time.time()
+         self.last_update = 0.0
+         self.visible = False
+@@ -65,7 +170,8 @@
+         xlate_from, xlate_to = ("=#", self.unicode_palette)
+ 
+         # If unicode is supported, swap the ASCII chars for nicer glyphs.
+-        if self._supports_unicode():
++        self.unicode_ok = self._supports_unicode()
++        if self.unicode_ok:
+             translation_table = str.maketrans(xlate_from, xlate_to)
+             frames = [f.translate(translation_table) for f in ascii_frames]
+             self.scan_char = xlate_to[xlate_from.find("#")]
+@@ -102,9 +208,42 @@
+         Spinner.last_frame_idx = self.frame_idx  # Update class variable
+         return frame
+ 
++    def _current_text(self, now: float) -> str:
++        if not self.cyberpunk:
++            return self.text
++
++        if now - self.last_phrase_change >= self.phrase_interval:
++            choices = [p for p in CYBERPUNK_PHRASES if p != self.text]
++            self.text = random.choice(choices)
++            self.current_color = random.choice(_COLOR_CODES)
++            self.last_phrase_change = now
++            self.phrase_interval = random.uniform(1.0, 2.2)
++
++        text = self.text
++        glitch_chars = _GLITCH_CHARS_UNICODE if self.unicode_ok else _GLITCH_CHARS
++
++        roll = random.random()
++        if roll < 0.05:
++            # Rare full-line scramble: every non-space char gets glitched for this frame.
++            chars = [c if c == " " else random.choice(glitch_chars) for c in text]
++            text = "".join(chars)
++        elif roll < 0.35:
++            # Regular case: corrupt a handful of characters.
++            chars = list(text)
++            idxs = [i for i, c in enumerate(chars) if c != " "]
++            if idxs:
++                n = random.randint(1, min(4, len(idxs)))
++                for i in random.sample(idxs, n):
++                    chars[i] = random.choice(glitch_chars)
++                text = "".join(chars)
++        return text
++
+     def step(self, text: str = None) -> None:
+         if text is not None:
+             self.text = text
++            self.cyberpunk = False
++            self.current_color = ""
++            self.reset_code = ""
+ 
+         if not self.is_tty:
+             return
+@@ -121,6 +260,7 @@
+ 
+         self.last_update = now
+         frame_str = self._next_frame()
++        display_text = self._current_text(now)
+ 
+         # Determine the maximum width for the spinner line
+         # Subtract 2 as requested, to leave a margin or prevent cursor wrapping issues
+@@ -128,7 +268,7 @@
+         if max_spinner_width < 0:  # Handle extremely narrow terminals
+             max_spinner_width = 0
+ 
+-        current_text_payload = f" {self.text}"
++        current_text_payload = f" {display_text}"
+         line_to_display = f"{frame_str}{current_text_payload}"
+ 
+         # Truncate the line if it's too long for the console width
+@@ -140,8 +280,17 @@
+         # Calculate padding to clear any remnants from a longer previous line
+         padding_to_clear = " " * max(0, self.last_display_len - len_line_to_display)
+ 
++        # Color codes are zero-width on the terminal, so wrapping the already
++        # truncated/measured plain line in them doesn't disturb any of the
++        # width/backspace math below, which all stays keyed off the plain string.
++        frame_color = self.current_color
++        if self.cyberpunk and random.random() < 0.15:
++            # Brief off-color flicker, independent of the phrase's assigned color.
++            frame_color = random.choice(_COLOR_CODES)
++        colored_line = f"{frame_color}{line_to_display}{self.reset_code}"
++
+         # Write the spinner frame, text, and any necessary clearing spaces
+-        sys.stdout.write(f"\r{line_to_display}{padding_to_clear}")
++        sys.stdout.write(f"\r{colored_line}{padding_to_clear}")
+         self.last_display_len = len_line_to_display
+ 
+         # Calculate number of backspaces to position cursor at the scanner character
+@@ -171,7 +320,7 @@
+ class WaitingSpinner:
+     """Background spinner that can be started/stopped safely."""
+ 
+-    def __init__(self, text: str = "Waiting for LLM", delay: float = 0.15):
++    def __init__(self, text: str = None, delay: float = 0.15):
+         self.spinner = Spinner(text)
+         self.delay = delay
+         self._stop_event = threading.Event()
+@@ -205,9 +354,9 @@
+ 
+ 
+ def main():
+-    spinner = Spinner("Running spinner...")
++    spinner = Spinner()
+     try:
+-        for _ in range(100):
++        for _ in range(200):
+             time.sleep(0.15)
+             spinner.step()
+         print("Success!")
