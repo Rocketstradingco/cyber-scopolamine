@@ -243,13 +243,34 @@ offline, private, zero-cost middle ground.
 The model is abliterated, meaning it will attempt whatever you ask. That is the
 point of the name. What you do with it is on you.
 
+## It shares, it doesn't take over
+
+If you already use Ollama or aider, this installs **alongside** them:
+
+- **Your Ollama model store is detected and shared**, never replaced — so
+  nothing is downloaded twice and your existing models keep working. If Ollama
+  is already running against that same store, the installer leaves it alone.
+- **aider is installed into a private environment** of its own
+  (`~\.config\cyber-scopolamine\aider-env`). Your own aider is never touched,
+  downgraded, or patched. That matters because this build is pinned to one
+  exact release and the themed patches rewrite aider's package internals —
+  doing that to a shared install would change how aider behaves in all your
+  other work.
+
 ## Uninstalling
 
+Double-click **`Uninstall Cyber-Scopolamine.bat`**, or run:
+
 ```powershell
-uv tool uninstall aider-chat
-Remove-Item -Recurse ~\.config\cyber-scopolamine, ~\.local\bin\cyber-scopolamine*
-Remove-Item "$([Environment]::GetFolderPath('Desktop'))\Cyber-Scopolamine.lnk"
+cyber-scopolamine-uninstall          # add -DryRun to preview
 ```
 
-Then delete the model store and sandbox (check the sandbox for work you want
-first), and uninstall Ollama from Windows Settings → Apps.
+It removes the commands, the config folder, the private aider environment and
+the desktop shortcut.
+
+**It never deletes models or data.** Not the model store, not any model —
+including ones it built — and not your sandbox, which holds your work. Those
+are listed at the end with the exact command to remove them yourself if you
+want to. Reinstalling later reuses the models rather than re-downloading them.
+
+Ollama itself is left installed; uninstall it from Windows Settings → Apps.

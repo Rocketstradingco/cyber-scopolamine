@@ -156,6 +156,33 @@ function Get-DriveCandidates {
     return $out | Sort-Object @{E={-not $_.Enough}}, Rank, @{E='FreeGB';D=$true}
 }
 
+function Get-ExistingOllamaStore {
+    foreach ($scope in @('User','Machine')) {
+        $v = [Environment]::GetEnvironmentVariable('OLLAMA_MODELS', $scope)
+        if ($v -and (Test-Path $v)) { return @{ Path=$v; Source="OLLAMA_MODELS ($scope environment variable)" } }
+    }
+    $log = Join-Path $env:LOCALAPPDATA 'Ollama\server.log'
+    if (Test-Path $log) {
+        $hit = Select-String -Path $log -Pattern 'OLLAMA_MODELS:(\S+)' -ErrorAction SilentlyContinue |
+               Select-Object -Last 1
+        if ($hit -and $hit.Matches[0].Groups[1].Value) {
+            $p = $hit.Matches[0].Groups[1].Value.TrimEnd(']','"',',').Replace('\\','\')
+            if (Test-Path $p) { return @{ Path=$p; Source='the Ollama server currently in use' } }
+        }
+    }
+    $def = Join-Path $env:USERPROFILE '.ollama\models'
+    if (Test-Path (Join-Path $def 'manifests')) { return @{ Path=$def; Source="Ollama's default location" } }
+    return $null
+}
+
+function Get-RunningOllamaStore {
+    $log = Join-Path $env:LOCALAPPDATA 'Ollama\server.log'
+    if (-not (Test-Path $log)) { return $null }
+    $hit = Select-String -Path $log -Pattern 'OLLAMA_MODELS:(\S+)' -ErrorAction SilentlyContinue | Select-Object -Last 1
+    if (-not $hit) { return $null }
+    return $hit.Matches[0].Groups[1].Value.TrimEnd(']','"',',').Replace('\\','\')
+}
+
 function Get-OllamaExe {
     $p = Join-Path $env:LOCALAPPDATA 'Programs\Ollama\ollama.exe'
     if (Test-Path $p) { return $p }
@@ -221,6 +248,12 @@ $aiderVer  = if (Test-Path $aiderExe) { try { (((& $aiderExe --version 2>&1) -jo
 $patchExe  = Get-PatchExe
 $gitExe    = (Get-Command git -ErrorAction SilentlyContinue).Source
 
+$existingStore = Get-ExistingOllamaStore
+if ($existingStore) {
+    Write-Have "Ollama model store: $($existingStore.Path)"
+    Write-Info "found via $($existingStore.Source) - will be shared, not replaced"
+}
+
 if ($ollamaVer -and $ollamaVer -ge $MIN_OLLAMA) { Write-Have "Ollama $ollamaVer" }
 elseif ($ollamaVer)                             { Write-Need "Ollama $ollamaVer is older than $MIN_OLLAMA - will upgrade" }
 else                                            { Write-Need 'Ollama - will download and install (~1.5 GB)' }
@@ -252,8 +285,17 @@ Write-Step 'Choosing locations'
 Write-Info "Put both on your fastest drive. Model load time is dominated by disk:"
 Write-Info "measured ~9s from NVMe versus ~57s from a spinning HDD."
 Write-Ok "Fastest drive with room: $($C.Bold)$($fastest.Letter):$($C.Reset) ($($fastest.Class), $($fastest.FreeGB) GB free)"
-if (-not $SandboxPath)    { $SandboxPath    = Read-Default 'Sandbox folder (the ONLY folder the agent may edit)' "$($fastest.Letter):\$SLUG-sandbox" }
-if (-not $ModelStorePath) { $ModelStorePath = Read-Default 'Model store (needs 10-25 GB)' "$($fastest.Letter):\$SLUG\models" }
+if (-not $SandboxPath) { $SandboxPath = Read-Default 'Sandbox folder (the ONLY folder the agent may edit)' "$($fastest.Letter):\$SLUG-sandbox" }
+
+if (-not $ModelStorePath) {
+    if ($existingStore) {
+        Write-Info 'You already have an Ollama model store. Sharing it means your'
+        Write-Info 'existing models keep working and nothing gets downloaded twice.'
+        $ModelStorePath = Read-Default 'Model store' $existingStore.Path
+    } else {
+        $ModelStorePath = Read-Default 'Model store (needs 10-25 GB)' "$($fastest.Letter):\$SLUG\models"
+    }
+}
 
 Write-Step 'Ready'
 Write-Host "    $($C.Muted)Model      $($C.Reset) $Model"
@@ -302,12 +344,29 @@ if (-not $ollamaVer -or $ollamaVer -lt $MIN_OLLAMA) {
     Write-Ok 'Ollama installed'
 } else { Write-Ok "Ollama $ollamaVer already present" }
 
-if ($aiderVer -ne $AIDER_VERSION) {
-    Write-Info "Installing aider $AIDER_VERSION..."
-    & $uvExe tool install --force "aider-chat==$AIDER_VERSION" | Out-Null
-    if (-not (Test-Path $aiderExe)) { throw 'aider install failed.' }
-    Write-Ok "aider $AIDER_VERSION installed"
-} else { Write-Ok "aider $AIDER_VERSION already present" }
+$cfgDir  = Join-Path $env:USERPROFILE ".config\$SLUG"
+$venvDir = Join-Path $cfgDir 'aider-env'
+New-Item -ItemType Directory -Force -Path $cfgDir | Out-Null
+
+$privateAider = Join-Path $venvDir 'Scripts\aider.exe'
+$havePrivate  = $false
+if (Test-Path $privateAider) {
+    try { $havePrivate = (((& $privateAider --version 2>&1) -join ' ') -match [regex]::Escape($AIDER_VERSION)) } catch { }
+}
+
+if ($havePrivate) {
+    Write-Ok "private aider $AIDER_VERSION already present"
+} else {
+    if ($aiderVer) { Write-Info "You have aider $aiderVer installed - leaving it untouched." }
+    Write-Info "Installing a private aider $AIDER_VERSION into $venvDir ..."
+    & $uvExe venv $venvDir 2>&1 | Out-Null
+    $venvPy = Join-Path $venvDir 'Scripts\python.exe'
+    if (-not (Test-Path $venvPy)) { throw "Could not create the private environment at $venvDir" }
+    & $uvExe pip install --python $venvPy "aider-chat==$AIDER_VERSION" 2>&1 | Out-Null
+    if (-not (Test-Path $privateAider)) { throw 'Private aider install failed.' }
+    Write-Ok "private aider $AIDER_VERSION installed (your own aider is unchanged)"
+}
+$aiderExe = $privateAider
 
 Write-Step 'Creating folders and configuration'
 $cfgDir   = Join-Path $env:USERPROFILE ".config\$SLUG"
@@ -382,16 +441,24 @@ if (-not $SkipModelPull) {
     Write-Info 'Several GB. Resumes if interrupted.'
     $env:OLLAMA_MODELS = $ModelStorePath
 
-    $wasUp = $false
-    try { Invoke-WebRequest 'http://127.0.0.1:11434/api/tags' -TimeoutSec 3 -UseBasicParsing | Out-Null; $wasUp = $true } catch { }
-    if ($wasUp) {
-        Write-Info 'Restarting Ollama so it uses the model store chosen above...'
-        Get-Process 'ollama','llama-server' -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
-        Start-Sleep -Seconds 2
-    }
     $up = $false
-    Start-Process -FilePath $ollamaExe -ArgumentList 'serve' -WindowStyle Hidden
-    for ($i=0; $i -lt 30; $i++) { Start-Sleep -Seconds 1; try { Invoke-WebRequest 'http://127.0.0.1:11434/api/tags' -TimeoutSec 2 -UseBasicParsing | Out-Null; $up=$true; break } catch { } }
+    try { Invoke-WebRequest 'http://127.0.0.1:11434/api/tags' -TimeoutSec 3 -UseBasicParsing | Out-Null; $up = $true } catch { }
+
+    if ($up) {
+        $runningStore = Get-RunningOllamaStore
+        if ($runningStore -and ($runningStore.TrimEnd('\') -ne $ModelStorePath.TrimEnd('\'))) {
+            Write-Info "Ollama is running against $runningStore - restarting it on $ModelStorePath"
+            Get-Process 'ollama','llama-server' -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+            Start-Sleep -Seconds 2
+            $up = $false
+        } else {
+            Write-Info 'Ollama is already running against this store - leaving it alone.'
+        }
+    }
+    if (-not $up) {
+        Start-Process -FilePath $ollamaExe -ArgumentList 'serve' -WindowStyle Hidden
+        for ($i=0; $i -lt 30; $i++) { Start-Sleep -Seconds 1; try { Invoke-WebRequest 'http://127.0.0.1:11434/api/tags' -TimeoutSec 2 -UseBasicParsing | Out-Null; $up=$true; break } catch { } }
+    }
     if (-not $up) { throw 'Ollama did not start - cannot pull the model.' }
     & $ollamaExe pull $Model
     if ($LASTEXITCODE -ne 0) { throw "Model pull failed for $Model" }

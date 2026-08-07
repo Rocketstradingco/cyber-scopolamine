@@ -13,11 +13,23 @@ if (-not $patchExe) {
     exit 1
 }
 
-$toolDir = (& (Join-Path $env:USERPROFILE '.local\bin\uv.exe') tool dir).Trim()
-$pkgRoot = Join-Path $toolDir 'aider-chat\Lib\site-packages'
+$pkgRoot = $null
+$envFile = Join-Path $env:USERPROFILE '.config\cyber-scopolamine\cs-env.ps1'
+if (Test-Path $envFile) {
+    . $envFile
+    if ($global:CS_AIDER_EXE -and (Test-Path $global:CS_AIDER_EXE)) {
+        $scripts = Split-Path -Parent $global:CS_AIDER_EXE
+        $candidate = Join-Path (Split-Path -Parent $scripts) 'Lib\site-packages'
+        if (Test-Path (Join-Path $candidate 'aider')) { $pkgRoot = $candidate }
+    }
+}
+if (-not $pkgRoot) {
+    $venv = Join-Path $env:USERPROFILE '.config\cyber-scopolamine\aider-env\Lib\site-packages'
+    if (Test-Path (Join-Path $venv 'aider')) { $pkgRoot = $venv }
+}
 
-if (-not (Test-Path (Join-Path $pkgRoot 'aider'))) {
-    Write-Error "Could not find the aider package under $pkgRoot - check your aider-chat install path."
+if (-not $pkgRoot) {
+    Write-Error "Could not find the private aider package. Re-run install.ps1."
     exit 1
 }
 
