@@ -30,6 +30,9 @@ function global:aider {
     Write-Host "$($c.Violet)Memory:$($c.Reset) fresh context each launch - the prior session's chat is"
     Write-Host "        auto-archived, not restored. Browse/reload old ones with"
     Write-Host "        'cyber-scopolamine-history [list|view|load]'."
+    Write-Host "$($c.Violet)Mode:  $($c.Reset) this is an editor, not a chatbot - every message is treated"
+    Write-Host "        as an edit request. To just talk: '/ask <question>' for one,"
+    Write-Host "        or '/chat-mode ask' for the session ('/chat-mode code' back)."
 
     $speed = $null; $resident = $false
     try {
@@ -55,11 +58,12 @@ function global:aider {
         $frames = @([char]0x280B,[char]0x2819,[char]0x2839,[char]0x2838,[char]0x283C,
                     [char]0x2834,[char]0x2826,[char]0x2827,[char]0x2807,[char]0x280F)
         $sw = [Diagnostics.Stopwatch]::StartNew(); $i = 0
-        while ($job.State -eq 'Running' -and $sw.Elapsed.TotalSeconds -lt 300) {
+        while ($job.State -in @('NotStarted','Running') -and $sw.Elapsed.TotalSeconds -lt 300) {
             Write-Host -NoNewline ("`r$($c.Violet)Speed: $($c.Reset) $($c.Cyan)$($frames[$i % $frames.Length])$($c.Reset) dosing the model into VRAM... {0:N0}s" -f $sw.Elapsed.TotalSeconds)
             Start-Sleep -Milliseconds 90; $i++
         }
         Write-Host -NoNewline ("`r" + (' ' * 72) + "`r")
+        $job | Wait-Job -Timeout 15 | Out-Null
         $speed = Receive-Job $job -ErrorAction SilentlyContinue
         Remove-Job $job -Force -ErrorAction SilentlyContinue
     }

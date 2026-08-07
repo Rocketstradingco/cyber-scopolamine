@@ -122,6 +122,7 @@ Double-click the icon. You land in the sandbox with the agent running.
 | Command | What |
 |---|---|
 | `cyber-scopolamine` | Start the agent (same as the icon) |
+| `cyber-scopolamine-chat` | Start in conversation mode — talk, no file edits |
 | `cyber-scopolamine-history list` | List archived conversations |
 | `cyber-scopolamine-history view 1` | Read one |
 | `cyber-scopolamine-history load 1` | Restore one as the active chat |
@@ -131,6 +132,21 @@ Double-click the icon. You land in the sandbox with the agent running.
 
 Inside aider: `/add <file>` puts a file in context, `/model <alias>` swaps
 models, `/help` lists everything, `Ctrl-C` twice quits.
+
+### It's an editor, not a chatbot
+
+This trips everyone up first time. aider starts in **code mode**, where every
+message is treated as a request to change code — say "hello" and it will ask
+what you want edited. That's by design.
+
+To just talk:
+
+| | |
+|---|---|
+| `/ask <question>` | Ask one question, no edits |
+| `/chat-mode ask` | Make the whole session conversational |
+| `/chat-mode code` | Switch back to editing |
+| `cyber-scopolamine-chat` | Launch straight into conversation mode |
 
 **Every launch starts a fresh conversation.** The previous one is archived, not
 deleted — small models get confused by long histories, so context doesn't bleed
