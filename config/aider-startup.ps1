@@ -1,4 +1,4 @@
-$csEnv = Join-Path $env:USERPROFILE '.config\cyber-scopolamine\cs-env.ps1'
+﻿$csEnv = Join-Path $env:USERPROFILE '.config\cyber-scopolamine\cs-env.ps1'
 if (Test-Path $csEnv) { . $csEnv }
 
 $env:OLLAMA_API_BASE = 'http://127.0.0.1:11434'

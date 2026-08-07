@@ -1,4 +1,4 @@
-param([switch]$Fast)
+﻿param([switch]$Fast)
 
 $ErrorActionPreference = 'Stop'
 

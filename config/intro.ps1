@@ -1,4 +1,4 @@
-function global:Test-CsCanReadKey {
+﻿function global:Test-CsCanReadKey {
     if ($null -ne $script:CsCanReadKey) { return $script:CsCanReadKey }
     try { $null = [Console]::KeyAvailable; $script:CsCanReadKey = $true }
     catch { $script:CsCanReadKey = $false }

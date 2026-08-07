@@ -1,4 +1,4 @@
-$ErrorActionPreference = 'Stop'
+﻿$ErrorActionPreference = 'Stop'
 
 $envFile = Join-Path $env:USERPROFILE '.config\cyber-scopolamine\cs-env.ps1'
 if (-not (Test-Path $envFile)) {

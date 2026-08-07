@@ -1,4 +1,4 @@
-[CmdletBinding()]
+﻿[CmdletBinding()]
 param([switch]$Undo, [switch]$Status)
 
 $ErrorActionPreference = 'Stop'

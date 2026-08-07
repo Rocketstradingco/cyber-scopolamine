@@ -1,4 +1,4 @@
-[CmdletBinding()]
+﻿[CmdletBinding()]
 param(
     [switch]$Unattended,
     [switch]$DryRun,
@@ -19,14 +19,43 @@ $CS_VERSION    = '1.0.0'
 $APP_NAME      = 'Cyber-Scopolamine'
 $SLUG          = 'cyber-scopolamine'
 
-$e = [char]27
-$C = @{
-    Reset="$e[0m"; Bold="$e[1m"
-    Violet="$e[38;2;168;85;247m"; Plum="$e[38;2;124;58;237m"
-    Cyan="$e[38;2;108;243;213m";  Lime="$e[38;2;200;255;107m"
-    White="$e[38;2;236;233;225m"; Muted="$e[38;2;110;100;130m"
-    Amber="$e[38;2;255;138;55m";  Red="$e[38;2;255;117;104m"
-    Orange="$e[38;2;241;106;22m"
+function Enable-VirtualTerminal {
+    if ($PSVersionTable.PSVersion.Major -ge 7 -or $env:WT_SESSION) { return $true }
+    try {
+        if (-not ('Cs.Vt' -as [type])) {
+            Add-Type -Namespace Cs -Name Vt -MemberDefinition @'
+[DllImport("kernel32.dll", SetLastError=true)]
+public static extern IntPtr GetStdHandle(int nStdHandle);
+[DllImport("kernel32.dll", SetLastError=true)]
+public static extern bool GetConsoleMode(IntPtr hConsoleHandle, out uint lpMode);
+[DllImport("kernel32.dll", SetLastError=true)]
+public static extern bool SetConsoleMode(IntPtr hConsoleHandle, uint dwMode);
+'@
+        }
+        $h = [Cs.Vt]::GetStdHandle(-11)
+        $mode = 0
+        if ([Cs.Vt]::GetConsoleMode($h, [ref]$mode)) {
+            return [Cs.Vt]::SetConsoleMode($h, $mode -bor 0x0004)
+        }
+    } catch { }
+    return $false
+}
+
+if (Enable-VirtualTerminal) {
+    $e = [char]27
+    $C = @{
+        Reset="$e[0m"; Bold="$e[1m"
+        Violet="$e[38;2;168;85;247m"; Plum="$e[38;2;124;58;237m"
+        Cyan="$e[38;2;108;243;213m";  Lime="$e[38;2;200;255;107m"
+        White="$e[38;2;236;233;225m"; Muted="$e[38;2;110;100;130m"
+        Amber="$e[38;2;255;138;55m";  Red="$e[38;2;255;117;104m"
+        Orange="$e[38;2;241;106;22m"
+    }
+} else {
+    $C = @{
+        Reset=''; Bold=''; Violet=''; Plum=''; Cyan=''; Lime=''
+        White=''; Muted=''; Amber=''; Red=''; Orange=''
+    }
 }
 
 $script:StepNo = 0
@@ -112,6 +141,7 @@ function Get-DriveCandidates {
             $phys = Get-PhysicalDisk -ErrorAction Stop | Where-Object DeviceId -eq $disk.Number
             if ($phys) { $media = $phys.MediaType }
         } catch { }
+        if ($bus -in @('USB','SD','MMC')) { continue }
 
         $rank = if     ($media -eq 'SSD' -and $bus -eq 'NVMe') { 0 }
                 elseif ($media -eq 'SSD')                      { 1 }
@@ -351,12 +381,17 @@ if (-not $SkipModelPull) {
     Write-Step "Downloading the model ($Model)"
     Write-Info 'Several GB. Resumes if interrupted.'
     $env:OLLAMA_MODELS = $ModelStorePath
-    $up = $false
-    try { Invoke-WebRequest 'http://127.0.0.1:11434/api/tags' -TimeoutSec 3 -UseBasicParsing | Out-Null; $up = $true } catch { }
-    if (-not $up) {
-        Start-Process -FilePath $ollamaExe -ArgumentList 'serve' -WindowStyle Hidden
-        for ($i=0; $i -lt 30; $i++) { Start-Sleep -Seconds 1; try { Invoke-WebRequest 'http://127.0.0.1:11434/api/tags' -TimeoutSec 2 -UseBasicParsing | Out-Null; $up=$true; break } catch { } }
+
+    $wasUp = $false
+    try { Invoke-WebRequest 'http://127.0.0.1:11434/api/tags' -TimeoutSec 3 -UseBasicParsing | Out-Null; $wasUp = $true } catch { }
+    if ($wasUp) {
+        Write-Info 'Restarting Ollama so it uses the model store chosen above...'
+        Get-Process 'ollama','llama-server' -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+        Start-Sleep -Seconds 2
     }
+    $up = $false
+    Start-Process -FilePath $ollamaExe -ArgumentList 'serve' -WindowStyle Hidden
+    for ($i=0; $i -lt 30; $i++) { Start-Sleep -Seconds 1; try { Invoke-WebRequest 'http://127.0.0.1:11434/api/tags' -TimeoutSec 2 -UseBasicParsing | Out-Null; $up=$true; break } catch { } }
     if (-not $up) { throw 'Ollama did not start - cannot pull the model.' }
     & $ollamaExe pull $Model
     if ($LASTEXITCODE -ne 0) { throw "Model pull failed for $Model" }
@@ -368,7 +403,16 @@ if (-not $SkipModelPull) {
     "FROM $Model`n`nPARAMETER num_ctx $NumCtx`n" | Set-Content -Path $mf -Encoding ascii
     & $ollamaExe create $AgentModel -f $mf | Out-Null
     Remove-Item $mf -Force -ErrorAction SilentlyContinue
-    Write-Ok "created $AgentModel"
+
+    $visible = $false
+    try {
+        $tags = Invoke-RestMethod 'http://127.0.0.1:11434/api/tags' -TimeoutSec 5
+        $visible = [bool]($tags.models | Where-Object { $_.name -eq "$AgentModel`:latest" })
+    } catch { }
+    if (-not $visible) {
+        throw "Built $AgentModel but Ollama cannot see it in $ModelStorePath. The install would fail at first launch, so stopping here."
+    }
+    Write-Ok "created $AgentModel and confirmed Ollama can load it"
 }
 
 Write-Step 'Ollama auto-update'

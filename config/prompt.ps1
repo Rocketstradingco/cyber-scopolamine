@@ -1,4 +1,4 @@
-if ($global:CS_PROMPT_LOADED) { return }
+﻿if ($global:CS_PROMPT_LOADED) { return }
 $global:CS_PROMPT_LOADED = $true
 
 $csBin = Join-Path $env:USERPROFILE '.local\bin'

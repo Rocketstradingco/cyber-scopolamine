@@ -1,4 +1,4 @@
-$ErrorActionPreference = 'Stop'
+﻿$ErrorActionPreference = 'Stop'
 
 $envFile = Join-Path $env:USERPROFILE '.config\cyber-scopolamine\cs-env.ps1'
 if (-not (Test-Path $envFile)) {
@@ -36,15 +36,46 @@ if ($orphans) {
     Start-Sleep -Seconds 2
 }
 
-try {
-    Invoke-WebRequest 'http://127.0.0.1:11434/api/tags' -TimeoutSec 3 -UseBasicParsing | Out-Null
-} catch {
-    Write-Host 'Ollama is not responding on 127.0.0.1:11434 - starting it...' -ForegroundColor Yellow
+function Test-CsModelVisible {
+    try {
+        $tags = Invoke-RestMethod 'http://127.0.0.1:11434/api/tags' -TimeoutSec 4
+        return [bool]($tags.models | Where-Object { $_.name -eq $global:CS_MODEL })
+    } catch { return $false }
+}
+
+function Start-CsOllama {
     Start-Process -FilePath $global:CS_OLLAMA_EXE -ArgumentList 'serve' -WindowStyle Hidden
     for ($i = 0; $i -lt 30; $i++) {
         Start-Sleep -Seconds 1
-        try { Invoke-WebRequest 'http://127.0.0.1:11434/api/tags' -TimeoutSec 2 -UseBasicParsing | Out-Null; break } catch { }
+        try { Invoke-WebRequest 'http://127.0.0.1:11434/api/tags' -TimeoutSec 2 -UseBasicParsing | Out-Null; return $true } catch { }
     }
+    return $false
+}
+
+$serverUp = $false
+try { Invoke-WebRequest 'http://127.0.0.1:11434/api/tags' -TimeoutSec 3 -UseBasicParsing | Out-Null; $serverUp = $true } catch { }
+if (-not $serverUp) {
+    Write-Host 'Ollama is not responding on 127.0.0.1:11434 - starting it...' -ForegroundColor Yellow
+    $serverUp = Start-CsOllama
+}
+
+if ($serverUp -and -not (Test-CsModelVisible)) {
+    Write-Host "Ollama is running against a different model store - restarting it..." -ForegroundColor Yellow
+    Get-Process 'ollama','llama-server' -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+    Start-Sleep -Seconds 2
+    $serverUp = Start-CsOllama
+}
+
+if (-not (Test-CsModelVisible)) {
+    Write-Host ''
+    Write-Host "  Model '$($global:CS_MODEL)' was not found." -ForegroundColor Red
+    Write-Host "  Store: $($global:CS_MODEL_STORE)" -ForegroundColor Red
+    Write-Host ''
+    Write-Host '  Rebuild it with:' -ForegroundColor Yellow
+    Write-Host "    ollama create $($global:CS_MODEL -replace ':latest$','') -f <Modelfile>" -ForegroundColor Yellow
+    Write-Host '  or re-run install.ps1, which will pull and build it for you.'
+    Write-Host ''
+    return
 }
 
 foreach ($rc in @(

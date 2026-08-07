@@ -1,0 +1,329 @@
+<title>Cyber-Scopolamine — first run</title>
+<style>
+  :root{
+    --ground:#0B0710;
+    --panel:#120C1B;
+    --violet:#A855F7;
+    --plum:#7C3AED;
+    --cyan:#6CF3D5;
+    --lime:#C8FF6B;
+    --white:#ECE9E1;
+    --muted:#6E6482;
+    --amber:#FF8A37;
+    --orange:#F16A16;
+    --mono:"Cascadia Mono","Cascadia Code",Consolas,"DejaVu Sans Mono","Liberation Mono",Menlo,monospace;
+  }
+
+  /* Deliberately single-theme: this page is a CRT terminal, and a light
+     variant would be a different object, not the same one re-tinted. */
+
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0}
+  body{
+    background:
+      radial-gradient(1200px 700px at 50% -10%, #1B0F2B 0%, transparent 60%),
+      var(--ground);
+    color:var(--white);
+    font-family:var(--mono);
+    min-height:100vh;
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    gap:18px;
+    padding:28px 16px 56px;
+  }
+
+  .eyebrow{
+    font-size:11px;
+    letter-spacing:.22em;
+    text-transform:uppercase;
+    color:var(--muted);
+    display:flex;
+    gap:10px;
+    align-items:center;
+  }
+  .eyebrow b{color:var(--violet);font-weight:600;letter-spacing:.22em}
+
+  .term{
+    width:min(1080px,100%);
+    border:1px solid #2A1D3D;
+    border-radius:12px;
+    background:linear-gradient(180deg,#150E20 0%, var(--panel) 100%);
+    box-shadow:0 0 0 1px #0A0610, 0 30px 80px -30px #A855F755, 0 10px 40px -20px #000;
+    overflow:hidden;
+  }
+  .bar{
+    display:flex;align-items:center;gap:10px;
+    padding:9px 14px;
+    background:#0F0A18;
+    border-bottom:1px solid #241634;
+  }
+  .dot{width:10px;height:10px;border-radius:50%;background:#3A2B4E}
+  .dot.a{background:#6E3A78}.dot.b{background:#4A3A78}.dot.c{background:#2F5F63}
+  .bar span{
+    margin-left:6px;font-size:11px;color:var(--muted);letter-spacing:.06em;
+  }
+
+  .screen{
+    position:relative;
+    padding:20px 18px 26px;
+    min-height:560px;
+    overflow-x:auto;
+  }
+  /* scanlines + vignette: phosphor, not decoration */
+  .screen::after{
+    content:"";position:absolute;inset:0;pointer-events:none;
+    background:repeating-linear-gradient(180deg, #ffffff08 0 1px, transparent 1px 3px);
+    mix-blend-mode:overlay;
+  }
+  .screen::before{
+    content:"";position:absolute;inset:0;pointer-events:none;
+    background:radial-gradient(120% 90% at 50% 40%, transparent 55%, #00000088 100%);
+  }
+
+  pre{
+    margin:0;
+    font-family:var(--mono);
+    font-size:13px;
+    line-height:1.45;
+    white-space:pre;
+    text-shadow:0 0 10px currentColor;
+  }
+  #art{font-size:clamp(6px,1.02vw,11px);line-height:1.12;margin-bottom:2px}
+  #artCompact{display:none;font-size:clamp(9px,2.4vw,14px);line-height:1.2}
+  @media (max-width:820px){
+    #art{display:none}
+    #artCompact{display:block}
+    pre{font-size:11.5px}
+  }
+
+  .v{color:var(--violet)} .c{color:var(--cyan)} .l{color:var(--lime)}
+  .w{color:var(--white)} .m{color:var(--muted)} .a{color:var(--amber)}
+  .o{color:var(--orange)} .p{color:var(--plum)}
+
+  .caret{
+    display:inline-block;width:9px;height:1.05em;vertical-align:-2px;
+    background:var(--cyan);box-shadow:0 0 12px var(--cyan);
+    animation:blink 1s steps(1,end) infinite;
+  }
+  @keyframes blink{50%{opacity:0}}
+
+  .glitch{animation:glitch .5s steps(2,end) 1}
+  @keyframes glitch{
+    0%{transform:translateX(0);filter:none}
+    25%{transform:translateX(-2px);filter:drop-shadow(2px 0 var(--cyan)) drop-shadow(-2px 0 var(--violet))}
+    50%{transform:translateX(2px)}
+    75%{transform:translateX(-1px);filter:drop-shadow(-2px 0 var(--cyan))}
+    100%{transform:translateX(0);filter:none}
+  }
+
+  .controls{
+    width:min(1080px,100%);
+    display:flex;gap:10px;flex-wrap:wrap;align-items:center;
+  }
+  button{
+    font-family:var(--mono);font-size:12px;letter-spacing:.08em;text-transform:uppercase;
+    color:var(--white);background:#1A1026;border:1px solid #33224A;
+    padding:9px 16px;border-radius:7px;cursor:pointer;
+    transition:border-color .15s, color .15s, box-shadow .15s;
+  }
+  button:hover{border-color:var(--violet);color:var(--violet);box-shadow:0 0 20px -6px var(--violet)}
+  button:focus-visible{outline:2px solid var(--cyan);outline-offset:2px}
+  .hint{font-size:11px;color:var(--muted);margin-left:auto}
+
+  @media (prefers-reduced-motion:reduce){
+    .caret{animation:none}
+    .glitch{animation:none}
+  }
+</style>
+
+<div class="eyebrow"><b>cyber-scopolamine</b> <span>//</span> first-run sequence <span>//</span> an RTCO Labs project</div>
+
+<div class="term">
+  <div class="bar">
+    <i class="dot a"></i><i class="dot b"></i><i class="dot c"></i>
+    <span>Windows Terminal — cyber-scopolamine</span>
+  </div>
+  <div class="screen">
+    <pre id="art" class="v"></pre>
+    <pre id="artCompact" class="v"></pre>
+    <pre id="out"></pre>
+  </div>
+</div>
+
+<div class="controls">
+  <button id="replay">Replay</button>
+  <button id="skip">Skip to end</button>
+  <span class="hint">In the real terminal, any key skips. This is a faithful replay of <code>cyber-scopolamine-intro</code>.</span>
+</div>
+
+<script>
+(function(){
+  var ART = [
+    " ██████╗██╗   ██╗██████╗ ███████╗██████╗ ",
+    "██╔════╝╚██╗ ██╔╝██╔══██╗██╔════╝██╔══██╗",
+    "██║      ╚████╔╝ ██████╔╝█████╗  ██████╔╝",
+    "██║       ╚██╔╝  ██╔══██╗██╔══╝  ██╔══██╗",
+    "╚██████╗   ██║   ██████╔╝███████╗██║  ██║",
+    " ╚═════╝   ╚═╝   ╚═════╝ ╚══════╝╚═╝  ╚═╝"
+  ];
+  var ART2 = [
+    "███████╗ ██████╗ ██████╗ ██████╗  ██████╗ ██╗      █████╗ ███╗   ███╗██╗███╗   ██╗███████╗",
+    "██╔════╝██╔════╝██╔═══██╗██╔══██╗██╔═══██╗██║     ██╔══██╗████╗ ████║██║████╗  ██║██╔════╝",
+    "███████╗██║     ██║   ██║██████╔╝██║   ██║██║     ███████║██╔████╔██║██║██╔██╗ ██║█████╗  ",
+    "╚════██║██║     ██║   ██║██╔═══╝ ██║   ██║██║     ██╔══██║██║╚██╔╝██║██║██║╚██╗██║██╔══╝  ",
+    "███████║╚██████╗╚██████╔╝██║     ╚██████╔╝███████╗██║  ██║██║ ╚═╝ ██║██║██║ ╚████║███████╗",
+    "╚══════╝ ╚═════╝ ╚═════╝ ╚═╝      ╚═════╝ ╚══════╝╚═╝  ╚═╝╚═╝     ╚═╝╚═╝╚═╝  ╚═══╝╚══════╝"
+  ];
+  var COMPACT = [
+    "╔═╗╦ ╦╔╗ ╔═╗╦═╗ ╔═╗╔═╗╔═╗╔═╗╔═╗╦  ╔═╗╔╦╗╦╔╗╔╔═╗",
+    "║  ╚╦╝╠╩╗║╣ ╠╦╝ ╚═╗║  ║ ║╠═╝║ ║║  ╠═╣║║║║║║║║╣ ",
+    "╚═╝ ╩ ╚═╝╚═╝╩╚═ ╚═╝╚═╝╚═╝╩  ╚═╝╩═╝╩ ╩╩ ╩╩╝╚╝╚═╝"
+  ];
+  var RULE = "  " + "-".repeat(66);
+  var BLOCKS = "░".repeat(30) + "▒".repeat(20) + "▓".repeat(14);
+
+  // [text, class, pauseAfterMs]  — null text = blank line
+  var SCRIPT = [
+    ["  " + BLOCKS, "p", 0],
+    ["  C17H21NO4  //  DEVIL'S BREATH FOR YOUR CODEBASE  //  IT CANNOT REFUSE", "w", 0],
+    ["  local model  //  no api keys  //  no cloud  //  works offline", "m", 0],
+    ["  an RTCO LABS project", "o", 500],
+    [null,"",0],
+    [RULE, "m", 0],
+    [null,"",0],
+    [["  SCOPOLAMINE","v"], ["  (hyoscine)  //  C17H21NO4","m"], 350],
+    [null,"",0],
+    ["  A deliriant alkaloid from the flower of the Brugmansia tree -","",0],
+    ["  the borrachero, or angel's trumpet - that grows across Colombia.","",0],
+    ["  Street name: DEVIL'S BREATH.","w",450],
+    [null,"",0],
+    ["  Its reputation comes from one specific effect. It does not","",0],
+    ["  sedate you, and it does not knock you out. You stay awake,","",0],
+    ["  you stay lucid, you hold a conversation.","",400],
+    [null,"",0],
+    ["  What it takes away is your ability to say no.","l",700],
+    [null,"",0],
+    [RULE,"m",0],
+    [null,"",0],
+    [["  The model running here is ",""],["abliterated",  "v"],[". The refusal behaviour has",""],0],
+    ["  been surgically removed from its weights. It will not lecture","",0],
+    ["  you, moralise at you, or decline. It has no capacity left to.","",400],
+    [null,"",0],
+    ["  Hence the name.","m",600],
+    [null,"",0],
+    [RULE,"m",0],
+    [null,"",0],
+    ["  THREE THINGS TO KNOW","c",0],
+    [null,"",0],
+    ["  1.  It runs entirely on your own GPU. No API key, no account,","",0],
+    ["      no cloud, no bill. Unplug the network and it still works.","",250],
+    ["  2.  It works inside one sandbox folder and starts there, so it","",0],
+    ["      will not scatter files across your disk. It only edits what","",0],
+    ["      you add to the chat - a guardrail, not a locked cage.","",250],
+    ["  3.  It is small, and it will be confidently wrong sometimes.","",0],
+    ["      Nothing is auto-committed. Read its edits before you keep them.","",500],
+    [null,"",0],
+    [RULE,"m",0],
+    [null,"",0],
+    ["  No guardrails means no guardrails. What it does is on you.","a",400],
+    [null,"",0],
+    [["  This plays once. Replay any time with ","m"],["cyber-scopolamine-intro","c"],[".","m"],0],
+    [null,"",0],
+    ["  Press any key to begin...","m",0]
+  ];
+
+  var out = document.getElementById('out');
+  var art = document.getElementById('art');
+  var artC = document.getElementById('artCompact');
+  var reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  var timer = null, skipped = false, running = false;
+
+  function esc(s){ return s.replace(/&/g,'&amp;').replace(/</g,'&lt;'); }
+
+  function paintArt(){
+    art.innerHTML = '<span class="v">' + ART.map(esc).join('\n') + '</span>\n' +
+                    '<span class="c">' + ART2.map(esc).join('\n') + '</span>';
+    artC.innerHTML = '<span class="v">' + COMPACT.map(esc).join('\n') + '</span>';
+    art.classList.remove('glitch'); artC.classList.remove('glitch');
+    if(!reduce){ void art.offsetWidth; art.classList.add('glitch'); artC.classList.add('glitch'); }
+  }
+
+  function seg(text, cls){
+    return cls ? '<span class="'+cls+'">'+esc(text)+'</span>' : esc(text);
+  }
+
+  function renderAll(){
+    var html = '';
+    for(var i=0;i<SCRIPT.length;i++){
+      var row = SCRIPT[i];
+      if(row[0] === null){ html += '\n'; continue; }
+      if(Array.isArray(row[0])){
+        for(var j=0;j<row.length-1;j++){ html += seg(row[j][0], row[j][1]); }
+        html += '\n';
+      } else {
+        html += seg(row[0], row[1]) + '\n';
+      }
+    }
+    out.innerHTML = html + '<span class="caret"></span>';
+  }
+
+  function play(){
+    if(timer){ clearTimeout(timer); }
+    running = true; skipped = false;
+    paintArt();
+    out.innerHTML = '';
+    if(reduce){ renderAll(); running=false; return; }
+
+    var line = 0, html = '';
+    function nextLine(){
+      if(skipped){ renderAll(); running=false; return; }
+      if(line >= SCRIPT.length){ out.innerHTML = html + '<span class="caret"></span>'; running=false; return; }
+      var row = SCRIPT[line];
+      var pause = row[row.length-1];
+      if(typeof pause !== 'number') pause = 0;
+
+      if(row[0] === null){
+        html += '\n'; line++;
+        out.innerHTML = html + '<span class="caret"></span>';
+        timer = setTimeout(nextLine, 90);
+        return;
+      }
+
+      var parts = Array.isArray(row[0]) ? row.slice(0,row.length-1) : [[row[0], row[1]]];
+      var pi = 0, ci = 0, acc = '';
+
+      function tick(){
+        if(skipped){ renderAll(); running=false; return; }
+        if(pi >= parts.length){
+          html += acc + '\n'; line++;
+          out.innerHTML = html + '<span class="caret"></span>';
+          timer = setTimeout(nextLine, pause + 60);
+          return;
+        }
+        var text = parts[pi][0], cls = parts[pi][1];
+        if(ci >= text.length){
+          acc += seg(text, cls); pi++; ci = 0;
+          timer = setTimeout(tick, 0);
+          return;
+        }
+        ci++;
+        var partial = seg(text.slice(0,ci), cls);
+        out.innerHTML = html + acc + partial + '<span class="caret"></span>';
+        timer = setTimeout(tick, 9);
+      }
+      tick();
+    }
+    nextLine();
+  }
+
+  document.getElementById('replay').addEventListener('click', play);
+  document.getElementById('skip').addEventListener('click', function(){
+    skipped = true;
+    if(timer) clearTimeout(timer);
+    paintArt(); renderAll(); running = false;
+  });
+
+  play();
+})();
+</script>

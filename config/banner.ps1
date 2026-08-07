@@ -1,4 +1,40 @@
+﻿function global:Enable-CsVirtualTerminal {
+    if ($null -ne $script:CsVtOk) { return $script:CsVtOk }
+    if ($PSVersionTable.PSVersion.Major -ge 7 -or $env:WT_SESSION) {
+        $script:CsVtOk = $true
+        return $true
+    }
+    try {
+        if (-not ('Cs.Vt' -as [type])) {
+            Add-Type -Namespace Cs -Name Vt -MemberDefinition @'
+[DllImport("kernel32.dll", SetLastError=true)]
+public static extern IntPtr GetStdHandle(int nStdHandle);
+[DllImport("kernel32.dll", SetLastError=true)]
+public static extern bool GetConsoleMode(IntPtr hConsoleHandle, out uint lpMode);
+[DllImport("kernel32.dll", SetLastError=true)]
+public static extern bool SetConsoleMode(IntPtr hConsoleHandle, uint dwMode);
+'@
+        }
+        $h = [Cs.Vt]::GetStdHandle(-11)
+        $mode = 0
+        if ([Cs.Vt]::GetConsoleMode($h, [ref]$mode)) {
+            $script:CsVtOk = [Cs.Vt]::SetConsoleMode($h, $mode -bor 0x0004)
+        } else {
+            $script:CsVtOk = $false
+        }
+    } catch {
+        $script:CsVtOk = $false
+    }
+    return $script:CsVtOk
+}
+
 function global:Get-CsPalette {
+    if (-not (Enable-CsVirtualTerminal)) {
+        return @{
+            Reset=''; Bold=''; Violet=''; Plum=''; Cyan=''; Lime=''
+            White=''; Muted=''; Amber=''; Red=''; Orange=''
+        }
+    }
     $e = [char]27
     @{
         Reset  = "$e[0m";                  Bold   = "$e[1m"

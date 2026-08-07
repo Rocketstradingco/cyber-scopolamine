@@ -1,4 +1,4 @@
-[CmdletBinding()]
+﻿[CmdletBinding()]
 param(
     [ValidateSet('list','view','load')][string]$Command = 'list',
     [string]$Ref
