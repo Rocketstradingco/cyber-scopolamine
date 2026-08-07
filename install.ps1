@@ -241,7 +241,7 @@ if (-not $SrcRoot) {
     Write-Step 'Downloading customizations'
     $tmp = Join-Path $env:TEMP "$SLUG-$(Get-Random)"
     New-Item -ItemType Directory -Force -Path $tmp | Out-Null
-    Invoke-WebRequest "https://github.com/REPLACE-ME/$SLUG/archive/refs/heads/main.zip" -OutFile "$tmp\src.zip" -UseBasicParsing
+    Invoke-WebRequest "https://github.com/Rocketstradingco/$SLUG/archive/refs/heads/main.zip" -OutFile "$tmp\src.zip" -UseBasicParsing
     Expand-Archive "$tmp\src.zip" -DestinationPath $tmp -Force
     $SrcRoot = (Get-ChildItem $tmp -Directory | Select-Object -First 1).FullName
     Write-Ok "fetched to $SrcRoot"

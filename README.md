@@ -24,7 +24,7 @@ unplugged.
 One command installs everything and tunes it to your specific graphics card.
 
 ```powershell
-irm https://raw.githubusercontent.com/REPLACE-ME/cyber-scopolamine/main/install.ps1 | iex
+irm https://raw.githubusercontent.com/Rocketstradingco/cyber-scopolamine/main/install.ps1 | iex
 ```
 
 Then double-click **Cyber-Scopolamine** on your Desktop.
