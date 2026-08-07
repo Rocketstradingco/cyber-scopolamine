@@ -21,13 +21,27 @@ refusal behaviour removed — **entirely on your own GPU**. No API keys, no
 account, no cloud, no per-token cost, and it keeps working with the network
 unplugged.
 
-One command installs everything and tunes it to your specific graphics card.
+Installs everything and tunes it to your specific graphics card.
+
+### Option 1 — download and double-click
+
+1. Click **Code → Download ZIP** at the top of this page
+2. Right-click the ZIP → **Extract All**
+3. Double-click **`Install Cyber-Scopolamine.bat`**
+
+Windows may show a *"Windows protected your PC"* notice because the file came
+from the internet — click **More info → Run anyway**. The installer is a plain
+text script; you can read every line of `install.ps1` before running it.
+
+### Option 2 — one line in PowerShell
 
 ```powershell
 irm https://raw.githubusercontent.com/Rocketstradingco/cyber-scopolamine/main/install.ps1 | iex
 ```
 
-Then double-click **Cyber-Scopolamine** on your Desktop.
+Either way, when it finishes, double-click **Cyber-Scopolamine** on your
+Desktop. The first launch plays a short intro explaining what this is; it plays
+once, and `cyber-scopolamine-intro` replays it.
 
 ---
 
@@ -127,6 +141,7 @@ Double-click the icon. You land in the sandbox with the agent running.
 | `cyber-scopolamine-history view 1` | Read one |
 | `cyber-scopolamine-history load 1` | Restore one as the active chat |
 | `scop` | Status: GPU, VRAM in use, loaded model, sandbox |
+| `cyber-scopolamine-intro` | Replay the intro sequence |
 | `cyber-scopolamine-patch` | Re-apply the themed aider patches |
 | `cyber-scopolamine-noupdate` | Re-disable Ollama's auto-updater |
 

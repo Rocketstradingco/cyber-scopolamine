@@ -55,4 +55,12 @@ foreach ($rc in @(
     if (Test-Path $rc) { . $rc }
 }
 
+$introMarker = Join-Path $env:USERPROFILE '.config\cyber-scopolamine\.intro-shown'
+$introScript = Join-Path $env:USERPROFILE '.config\cyber-scopolamine\intro.ps1'
+if ((-not (Test-Path $introMarker)) -and (Test-Path $introScript)) {
+    . $introScript
+    try { Show-CsIntro } catch { }
+    New-Item -ItemType File -Path $introMarker -Force | Out-Null
+}
+
 aider @args

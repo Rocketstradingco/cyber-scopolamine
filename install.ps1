@@ -300,9 +300,12 @@ foreach ($d in @($cfgDir,$binDir,$patchDir,$ModelStorePath,$SandboxPath,(Join-Pa
 `$global:CS_BACKEND     = '$($gpu.Backend)'
 "@ | Set-Content -Path (Join-Path $cfgDir 'cs-env.ps1') -Encoding UTF8
 
-foreach ($f in @('banner.ps1','prompt.ps1','aider-startup.ps1')) {
+foreach ($f in @('banner.ps1','prompt.ps1','aider-startup.ps1','intro.ps1')) {
     Copy-Item (Join-Path $SrcRoot "config\$f") (Join-Path $cfgDir $f) -Force
 }
+$iconSrc = Join-Path $SrcRoot 'assets\cyber-scopolamine.ico'
+$iconDst = Join-Path $cfgDir 'cyber-scopolamine.ico'
+if (Test-Path $iconSrc) { Copy-Item $iconSrc $iconDst -Force }
 Copy-Item (Join-Path $SrcRoot 'bin\*')     $binDir   -Force
 Copy-Item (Join-Path $SrcRoot 'patches\*') $patchDir -Force
 Write-Ok "config  -> $cfgDir"
@@ -395,8 +398,7 @@ try {
     }
     $lnk.WorkingDirectory = $SandboxPath
     $lnk.Description      = "$APP_NAME - local AI coding agent, confined to $SandboxPath"
-    $icon = Join-Path $env:LOCALAPPDATA 'Programs\Ollama\app.ico'
-    if (Test-Path $icon) { $lnk.IconLocation = "$icon,0" }
+    if (Test-Path $iconDst) { $lnk.IconLocation = "$iconDst,0" }
     $lnk.Save()
     Write-Ok "created '$lnkPath'"
 } catch {
