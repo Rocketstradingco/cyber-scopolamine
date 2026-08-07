@@ -1,0 +1,148 @@
+CYBER-SCOPOLAMINE - HOW TO INSTALL
+an RTCO Labs project
+
+===============================================================================
+WHAT THIS IS
+===============================================================================
+
+A coding assistant that runs entirely on your own computer. No account, no API
+key, no subscription, no cloud. Once installed it works with the internet
+unplugged, and nothing you type ever leaves your machine.
+
+It comes in two parts:
+
+  cyber-scopolamine        an AI that edits code in a sandbox folder
+  cyber-scopolamine-chat   a plain chatbot, no file access at all
+
+
+===============================================================================
+BEFORE YOU START
+===============================================================================
+
+You need:
+
+  - Windows 10 or 11
+  - A graphics card with 4 GB of memory or more (NVIDIA, AMD or Intel).
+    Less will work, but slowly, on the CPU.
+  - About 30 GB of free disk space
+  - An internet connection for the install itself (it downloads the AI model,
+    which is several GB). After that it runs offline.
+
+You do NOT need administrator rights. Everything installs under your own user
+account.
+
+Optional but recommended - install these first if you don't have them:
+
+  - Git for Windows   https://git-scm.com/download/win
+  - PowerShell 7      https://aka.ms/powershell-release?tag=stable
+
+Without Git you lose the themed loading animation. Without PowerShell 7 it
+still works, it just looks plainer.
+
+
+===============================================================================
+INSTALLING
+===============================================================================
+
+  1.  Right-click the ZIP file you were sent and choose "Extract All".
+      Extract it anywhere - your Desktop or Downloads is fine.
+
+  2.  Open the "cyber-scopolamine" folder that appears.
+
+  3.  Double-click:   Install Cyber-Scopolamine.bat
+
+  4.  Windows will probably show a blue box saying
+      "Windows protected your PC".
+      This happens with any file downloaded from the internet.
+      Click "More info", then "Run anyway".
+
+  5.  Answer the questions. Pressing Enter accepts the sensible default
+      every time. It will:
+        - look at your graphics card and pick an AI model that fits it
+        - pick your fastest drive
+        - download the model (this is the slow part, several GB)
+
+  6.  When it finishes you'll have a "Cyber-Scopolamine" icon on your
+      Desktop. Double-click it.
+
+The first launch plays a short intro explaining what this is. It plays once.
+
+
+===============================================================================
+USING IT
+===============================================================================
+
+Double-click the Desktop icon to start the coding assistant.
+
+IMPORTANT - it is an editor, not a chatbot. Everything you type is treated as
+a request to change code. If you type "hello" it will ask what you want
+edited. That is normal.
+
+To just have a conversation, open a terminal and run:
+
+    cyber-scopolamine-chat
+
+Other commands you can run from any terminal:
+
+    cyber-scopolamine             start the coding assistant
+    cyber-scopolamine-chat        plain conversation, no file access
+    cyber-scopolamine-history     browse past conversations
+    cyber-scopolamine-intro       replay the intro
+    cyber-scopolamine-uninstall   remove it
+    scop                          show status
+
+Inside the coding assistant:
+
+    /add somefile.py        let it see and edit that file
+    /ask how does X work?   ask a question without editing anything
+    /code                   go back to editing
+    /help                   list everything
+    Ctrl-C twice            quit
+
+
+===============================================================================
+THE SANDBOX
+===============================================================================
+
+The assistant works inside one folder, chosen during install (by default
+C:\cyber-scopolamine-sandbox). Put a project in there, or let it create files.
+
+This keeps a small AI from wandering across your whole disk on a vague
+instruction. It is a guardrail, not a locked cage.
+
+Nothing is committed to git automatically. Read what it changed before you
+keep it. These models are small and will sometimes be confidently wrong.
+
+
+===============================================================================
+IF SOMETHING GOES WRONG
+===============================================================================
+
+It suddenly got about 5x slower
+    Close the window and start it again from the Desktop icon. Leftover
+    background processes can hold onto graphics memory; relaunching clears
+    them out automatically.
+
+The first message takes ~10 seconds
+    Normal. The model is loading into your graphics card. Later messages are
+    fast.
+
+It says a model was not found
+    Run the installer again. It will rebuild it without re-downloading.
+
+The animation or colours don't show
+    Start it from the Desktop icon or a normal terminal window, not from
+    inside an editor or another program.
+
+
+===============================================================================
+UNINSTALLING
+===============================================================================
+
+Double-click "Uninstall Cyber-Scopolamine.bat" in this same folder.
+
+It removes the program, its settings and the Desktop icon.
+
+It does NOT delete any AI models, and it does NOT delete your sandbox folder
+or anything you made in it. It will tell you where those are and how to
+remove them yourself if you want the disk space back.

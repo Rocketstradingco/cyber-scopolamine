@@ -23,25 +23,28 @@ unplugged.
 
 Installs everything and tunes it to your specific graphics card.
 
-### Option 1 — download and double-click
-
-1. Click **Code → Download ZIP** at the top of this page
+1. Get the whole folder — **Code → Download ZIP** here, or the ZIP you were
+   sent
 2. Right-click the ZIP → **Extract All**
-3. Double-click **`Install Cyber-Scopolamine.bat`**
+3. Open the extracted `cyber-scopolamine` folder
+4. Double-click **`Install Cyber-Scopolamine.bat`**
 
-Windows may show a *"Windows protected your PC"* notice because the file came
+Windows will likely show *"Windows protected your PC"* because the file came
 from the internet — click **More info → Run anyway**. The installer is a plain
-text script; you can read every line of `install.ps1` before running it.
+text script; you can read every line of `install.ps1` first.
 
-### Option 2 — one line in PowerShell
+`INSTALL.txt` in the same folder covers all of this in plain language, plus
+first steps and troubleshooting.
 
-```powershell
-irm https://raw.githubusercontent.com/Rocketstradingco/cyber-scopolamine/main/install.ps1 | iex
-```
+> **This repository is private**, so there is no `irm … | iex` one-liner and no
+> public download link. `install.ps1` must be run from an extracted copy of the
+> folder — it needs the `config\`, `bin\` and `patches\` directories sitting
+> next to it. Run on its own, it stops and says so rather than failing with a
+> 404.
 
-Either way, when it finishes, double-click **Cyber-Scopolamine** on your
-Desktop. The first launch plays a short intro explaining what this is; it plays
-once, and `cyber-scopolamine-intro` replays it.
+When it finishes, double-click **Cyber-Scopolamine** on your Desktop. The first
+launch plays a short intro explaining what this is; it plays once, and
+`cyber-scopolamine-intro` replays it.
 
 ---
 

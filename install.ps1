@@ -217,6 +217,18 @@ if ($SrcRoot) {
     Write-Host ''
     Write-Host "  $($C.Violet)$($C.Bold)CYBER-SCOPOLAMINE$($C.Reset)  $($C.Muted)installer v$CS_VERSION  //  an $($C.Orange)RTCO LABS$($C.Muted) project$($C.Reset)"
     Write-Host ''
+    Write-Host "  $($C.Red)This installer could not find the files it needs.$($C.Reset)"
+    Write-Host ''
+    Write-Host "  install.ps1 has to sit next to the config\, bin\ and patches\"
+    Write-Host "  folders it installs. It looks like it was run on its own."
+    Write-Host ''
+    Write-Host "  $($C.Cyan)Fix:$($C.Reset) extract the whole cyber-scopolamine folder from the ZIP,"
+    Write-Host "  then double-click $($C.Bold)Install Cyber-Scopolamine.bat$($C.Reset) inside it."
+    Write-Host ''
+    Write-Host "  $($C.Muted)This is a private project, so there is no public download link$($C.Reset)"
+    Write-Host "  $($C.Muted)to fall back to. See INSTALL.txt for step-by-step instructions.$($C.Reset)"
+    Write-Host ''
+    return
 }
 
 Write-Step 'Scanning this system'
@@ -312,16 +324,6 @@ Write-Host "    $($C.Muted)Shortcut   $($C.Reset) Desktop -> '$APP_NAME'"
 Write-Host ''
 if ($DryRun) { Write-Host "  $($C.Cyan)Dry run - nothing was changed.$($C.Reset)"; return }
 if (-not (Confirm-Step 'Install?')) { Write-Bad 'Cancelled.'; return }
-
-if (-not $SrcRoot) {
-    Write-Step 'Downloading customizations'
-    $tmp = Join-Path $env:TEMP "$SLUG-$(Get-Random)"
-    New-Item -ItemType Directory -Force -Path $tmp | Out-Null
-    Invoke-WebRequest "https://github.com/Rocketstradingco/$SLUG/archive/refs/heads/main.zip" -OutFile "$tmp\src.zip" -UseBasicParsing
-    Expand-Archive "$tmp\src.zip" -DestinationPath $tmp -Force
-    $SrcRoot = (Get-ChildItem $tmp -Directory | Select-Object -First 1).FullName
-    Write-Ok "fetched to $SrcRoot"
-}
 
 Write-Step 'Installing prerequisites'
 if (-not $uvExe) {
