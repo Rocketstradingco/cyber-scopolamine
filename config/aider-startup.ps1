@@ -31,8 +31,9 @@ function global:aider {
     Write-Host "        auto-archived, not restored. Browse/reload old ones with"
     Write-Host "        'cyber-scopolamine-history [list|view|load]'."
     Write-Host "$($c.Violet)Mode:  $($c.Reset) this is an editor, not a chatbot - every message is treated"
-    Write-Host "        as an edit request. To just talk: '/ask <question>' for one,"
-    Write-Host "        or '/chat-mode ask' for the session ('/chat-mode code' back)."
+    Write-Host "        as an edit request. '/ask <question>' asks just one; '/ask'"
+    Write-Host "        alone switches to asking, '/code' switches back. For a plain"
+    Write-Host "        conversation with no repo attached, run cyber-scopolamine-chat."
 
     $speed = $null; $resident = $false
     try {
@@ -76,16 +77,4 @@ function global:aider {
     Write-Host "$($c.Muted)$('-' * 66)$($c.Reset)"
 
     & $global:CsAiderExe @args
-}
-
-function global:aider-uncensored {
-    $c = if ($global:CsColor) { $global:CsColor } else { Get-CsPalette }
-    Write-Host "$($c.Muted)-- $($c.Reset)$($c.Bold)$($c.Violet)CYBER-SCOPOLAMINE$($c.Reset) $($c.Muted)chat-only (uncensored) $('-' * 23)$($c.Reset)"
-    Write-Host "$($c.Violet)Scope: $($c.Reset) conversation only - file edits are disabled (chat-mode"
-    Write-Host "        ask), since this model isn't code-tuned and produces"
-    Write-Host "        broken stub files if asked to write code. Use 'aider'"
-    Write-Host "        for anything that needs real files written."
-    Write-Host "$($c.Muted)$('-' * 66)$($c.Reset)"
-
-    & $global:CsAiderExe --model uncensored --chat-mode ask @args
 }

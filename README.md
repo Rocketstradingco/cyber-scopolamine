@@ -150,18 +150,32 @@ models, `/help` lists everything, `Ctrl-C` twice quits.
 
 ### It's an editor, not a chatbot
 
-This trips everyone up first time. aider starts in **code mode**, where every
-message is treated as a request to change code — say "hello" and it will ask
-what you want edited. That's by design.
+This trips everyone up first time. `cyber-scopolamine` starts in **code mode**,
+where every message is treated as a request to change code — say "hello" and it
+will ask what you want edited. That's by design: it's a coding agent.
 
-To just talk:
+**If you want to just talk, use a different command:**
+
+```powershell
+cyber-scopolamine-chat
+```
+
+That's a plain conversation with the same local model — streamed, with memory
+of the conversation, and no repo attached at all. It cannot read or write
+files, so it can't touch anything. Commands inside it: `/exit`, `/clear`,
+`/model <name>`, `/save <file>`.
+
+Inside the editor you can also switch modes without leaving:
 
 | | |
 |---|---|
 | `/ask <question>` | Ask one question, no edits |
-| `/chat-mode ask` | Make the whole session conversational |
-| `/chat-mode code` | Switch back to editing |
-| `cyber-scopolamine-chat` | Launch straight into conversation mode |
+| `/ask` | Switch to asking about the code |
+| `/code` | Switch back to editing |
+
+Note that aider's `--chat-mode` flag is **not** a chat mode — it's an alias for
+`--edit-format`, so passing it a made-up value just prints a list of edit
+formats. Use `cyber-scopolamine-chat` or `/ask`.
 
 **Every launch starts a fresh conversation.** The previous one is archived, not
 deleted — small models get confused by long histories, so context doesn't bleed
