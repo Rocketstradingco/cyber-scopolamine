@@ -1,50 +1,41 @@
-# RTCO Labs interactive PowerShell shell.
-# Palette: RTCO orange, signal teal, status lime, warm white, and graphite.
-# Windows port of rtcolabserver:~/.config/rtco/prompt.bash.
+if ($global:CS_PROMPT_LOADED) { return }
+$global:CS_PROMPT_LOADED = $true
 
-if ($global:RTCO_PROMPT_LOADED) { return }
-$global:RTCO_PROMPT_LOADED = $true
+$csBin = Join-Path $env:USERPROFILE '.local\bin'
+if ((Test-Path $csBin) -and ($env:PATH -notlike "*$csBin*")) { $env:PATH = "$csBin;$env:PATH" }
 
-$local:bin = Join-Path $env:USERPROFILE '.local\bin'
-if ((Test-Path $local:bin) -and ($env:PATH -notlike "*$local:bin*")) {
-    $env:PATH = "$local:bin;$env:PATH"
+$bannerFile = Join-Path $env:USERPROFILE '.config\cyber-scopolamine\banner.ps1'
+if (Test-Path $bannerFile) { . $bannerFile }
+
+$global:CsColor = if (Get-Command Get-CsPalette -ErrorAction SilentlyContinue) { Get-CsPalette } else {
+    $e = [char]27
+    @{ Reset="$e[0m"; Bold="$e[1m"; Violet="$e[38;2;168;85;247m"; Plum="$e[38;2;124;58;237m"
+       Cyan="$e[38;2;108;243;213m"; Lime="$e[38;2;200;255;107m"; White="$e[38;2;236;233;225m"
+       Muted="$e[38;2;110;100;130m"; Amber="$e[38;2;255;138;55m"; Red="$e[38;2;255;117;104m"
+       Orange="$e[38;2;241;106;22m" }
 }
 
-$global:RtcoColor = @{
-    Reset  = "`e[0m";                    Bold  = "`e[1m"
-    Orange = "`e[38;2;241;106;22m";      Amber = "`e[38;2;255;138;55m"
-    Teal   = "`e[38;2;108;243;213m";     Lime  = "`e[38;2;200;255;107m"
-    White  = "`e[38;2;236;233;225m";     Muted = "`e[38;2;119;129;126m"
-    Red    = "`e[38;2;255;117;104m"
-}
-
-function global:_rtco_git_segment {
-    $c = $global:RtcoColor
+function global:_cs_git_segment {
+    $c = $global:CsColor
     git rev-parse --is-inside-work-tree 2>$null | Out-Null
     if ($LASTEXITCODE -ne 0) { return '' }
-
     $branch = git symbolic-ref --quiet --short HEAD 2>$null
     if (-not $branch) { $branch = git rev-parse --short HEAD 2>$null }
     if (-not $branch) { return '' }
-
     $dirty = ''
     if (git status --porcelain --untracked-files=normal 2>$null) { $dirty = '*' }
-
     return " $($c.Muted)git:$($c.Lime)$branch$dirty$($c.Reset)"
 }
 
 function global:prompt {
     $exitCode = $LASTEXITCODE
     $ok = $?
-    $c = $global:RtcoColor
+    $c = $global:CsColor
 
-    $gitSegment = _rtco_git_segment
-
+    $gitSegment = _cs_git_segment
     $jobsSegment = ''
     $jobCount = @(Get-Job -State Running -ErrorAction SilentlyContinue).Count
-    if ($jobCount -gt 0) {
-        $jobsSegment = " $($c.Muted)jobs:$($c.Amber)$jobCount$($c.Reset)"
-    }
+    if ($jobCount -gt 0) { $jobsSegment = " $($c.Muted)jobs:$($c.Amber)$jobCount$($c.Reset)" }
 
     if ($ok -and (($null -eq $exitCode) -or ($exitCode -eq 0))) {
         $statusSegment = "$($c.Lime)$([char]0x25C6)$($c.Reset)"
@@ -52,82 +43,76 @@ function global:prompt {
         $statusSegment = "$($c.Red)x$exitCode$($c.Reset)"
     }
 
-    # PROMPT_DIRTRIM=3 equivalent - keep the tail of deep paths.
     $path = $PWD.Path.Replace($env:USERPROFILE, '~')
     $parts = $path -split '[\\/]'
     if ($parts.Count -gt 3) { $path = '...' + [IO.Path]::DirectorySeparatorChar + ($parts[-3..-1] -join [IO.Path]::DirectorySeparatorChar) }
 
-    $host.UI.RawUI.WindowTitle = "RTCO LABS // $env:USERNAME@$env:COMPUTERNAME // $path"
+    $host.UI.RawUI.WindowTitle = "CYBER-SCOPOLAMINE // $env:USERNAME@$env:COMPUTERNAME // $path"
 
-    $time = Get-Date -Format 'HH:mm'
-    $line = "$($c.Muted)$([char]0x256D)$([char]0x2500)$($c.Reset) "
-    $line += "$($c.Orange)$($c.Bold)RTCO LABS$($c.Reset) "
+    $line  = "$($c.Muted)$([char]0x256D)$([char]0x2500)$($c.Reset) "
+    $line += "$($c.Violet)$($c.Bold)CYBER-SCOPOLAMINE$($c.Reset) "
     $line += "$($c.Muted)//$($c.Reset) $($c.White)$env:USERNAME@$env:COMPUTERNAME$($c.Reset) "
-    $line += "$($c.Muted)//$($c.Reset) $($c.Teal)$path$($c.Reset)"
+    $line += "$($c.Muted)//$($c.Reset) $($c.Cyan)$path$($c.Reset)"
     $line += "$gitSegment$jobsSegment "
-    $line += "$($c.Muted)// $time$($c.Reset)"
+    $line += "$($c.Muted)// $(Get-Date -Format 'HH:mm')$($c.Reset)"
 
     Write-Host $line
     return "$($c.Muted)$([char]0x2570)$([char]0x2500)$($c.Reset) $statusSegment "
 }
 
-function global:rtco-banner {
-    $c = $global:RtcoColor
-    Write-Host ''
-    Write-Host "$($c.Orange)  $([char]0x25C6)  $($c.Bold)$($c.White)RTCO LABS$($c.Reset)$($c.Muted)  //  LOCAL AGENT WORKSTATION$($c.Reset)"
-    Write-Host "$($c.Muted)     WINDOWS  //  $($c.Teal)PRIVATE TAILNET$($c.Muted)  //  $($c.Lime)OPERATOR READY$($c.Reset)"
-    Write-Host ''
-}
+function global:cs-status {
+    $c = $global:CsColor
+    $envFile = Join-Path $env:USERPROFILE '.config\cyber-scopolamine\cs-env.ps1'
+    if (Test-Path $envFile) { . $envFile }
 
-function global:rtco-status {
-    $c = $global:RtcoColor
-
-    $tailnetIp = (tailscale ip -4 2>$null | Select-Object -First 1)
-    $disk = Get-PSDrive -Name C
-    $storage = "{0:N0} GB used / {1:N0} GB free" -f ($disk.Used / 1GB), ($disk.Free / 1GB)
     $os = Get-CimInstance Win32_OperatingSystem
-    $memory = "{0:N1} GB used / {1:N1} GB available" -f `
-        (($os.TotalVisibleMemorySize - $os.FreePhysicalMemory) / 1MB), ($os.FreePhysicalMemory / 1MB)
-    $uptime = (Get-Date) - $os.LastBootUpTime
-    $uptimeText = "{0}d {1}h {2}m" -f $uptime.Days, $uptime.Hours, $uptime.Minutes
 
     Write-Host ''
-    Write-Host "$($c.Bold)$($c.White)RTCO LABS$($c.Reset)$($c.Muted)  //  NODE STATUS$($c.Reset)"
-    foreach ($row in @(
-        @('HOST',    $env:COMPUTERNAME),
-        @('TAILNET', $(if ($tailnetIp) { $tailnetIp } else { 'unavailable' })),
-        @('UPTIME',  $uptimeText),
-        @('STORAGE', $storage),
-        @('MEMORY',  $memory)
-    )) {
-        Write-Host ("$($c.Orange){0,-12}$($c.Reset) {1}" -f $row[0], $row[1])
-    }
+    Write-Host "$($c.Bold)$($c.White)CYBER-SCOPOLAMINE$($c.Reset)$($c.Muted)  //  STATUS$($c.Reset)"
 
-    # GPU line has no server equivalent - this box is the one with the card.
-    $gpu = 'not loaded'
+    $gpuName = (Get-CimInstance Win32_VideoController -EA SilentlyContinue |
+                Where-Object { $_.AdapterRAM -gt 0 } | Select-Object -First 1).Name
+    if ($gpuName) { Write-Host ("$($c.Violet){0,-12}$($c.Reset) {1}" -f 'GPU', $gpuName) }
     try {
-        $ps = & (Join-Path $env:LOCALAPPDATA 'Programs\Ollama\ollama.exe') ps 2>$null | Select-Object -Skip 1
-        if ($ps) { $gpu = ($ps | Select-Object -First 1) -replace '\s{2,}', '  ' }
+        $usedMB = ((Get-Counter '\GPU Adapter Memory(*)\Dedicated Usage' -EA Stop).CounterSamples |
+                   Measure-Object CookedValue -Sum).Sum / 1MB
+        Write-Host ("$($c.Violet){0,-12}$($c.Reset) {1:N0} MB in use" -f 'VRAM', $usedMB)
     } catch { }
-    Write-Host ("$($c.Orange){0,-12}$($c.Reset) {1}" -f 'MODEL', $gpu)
 
-    foreach ($svc in @('ollama', 'docker', 'sshd', 'tailscaled')) {
-        $state = 'inactive'
-        switch ($svc) {
-            'ollama'     { if (Get-Process 'ollama' -ErrorAction SilentlyContinue) { $state = 'active' } }
-            'docker'     { if (Get-Process 'com.docker.backend', 'Docker Desktop' -ErrorAction SilentlyContinue) { $state = 'active' } }
-            'sshd'       { if ((Get-Service sshd -ErrorAction SilentlyContinue).Status -eq 'Running') { $state = 'active' } }
-            'tailscaled' { if (Get-Process 'tailscaled', 'tailscale-ipn' -ErrorAction SilentlyContinue) { $state = 'active' } }
-        }
-        $color = if ($state -eq 'active') { $c.Lime } else { $c.Red }
-        Write-Host ("$($c.Orange){0,-12}$($c.Reset) $color{1}$($c.Reset)" -f $svc.ToUpper(), $state)
+    $model = 'not loaded'
+    $ollamaUp = $false
+    try {
+        $exe = if ($global:CS_OLLAMA_EXE) { $global:CS_OLLAMA_EXE } else { Join-Path $env:LOCALAPPDATA 'Programs\Ollama\ollama.exe' }
+        $ps = & $exe ps 2>$null | Select-Object -Skip 1
+        if ($ps) { $model = ($ps | Select-Object -First 1) -replace '\s{2,}', '  ' }
+        $ollamaUp = [bool](Get-Process 'ollama' -EA SilentlyContinue)
+    } catch { }
+    Write-Host ("$($c.Violet){0,-12}$($c.Reset) {1}" -f 'MODEL', $model)
+
+    $col = if ($ollamaUp) { $c.Lime } else { $c.Red }
+    Write-Host ("$($c.Violet){0,-12}$($c.Reset) $col{1}$($c.Reset)" -f 'OLLAMA', $(if ($ollamaUp) { 'running' } else { 'stopped' }))
+
+    $orphans = @(Get-CimInstance Win32_Process -Filter "Name='llama-server.exe'" -EA SilentlyContinue |
+                 Where-Object { -not (Get-Process -Id $_.ParentProcessId -EA SilentlyContinue) })
+    if ($orphans.Count -gt 0) {
+        Write-Host ("$($c.Violet){0,-12}$($c.Reset) $($c.Red){1} orphaned runner(s) holding VRAM - relaunch to reap$($c.Reset)" -f 'WARNING', $orphans.Count)
     }
+
+    if ($global:CS_SANDBOX) {
+        Write-Host ("$($c.Violet){0,-12}$($c.Reset) {1}" -f 'SANDBOX', $global:CS_SANDBOX)
+    }
+    if ($global:CS_MODEL_STORE -and (Test-Path $global:CS_MODEL_STORE)) {
+        $d = Get-PSDrive -Name ($global:CS_MODEL_STORE.Substring(0,1)) -EA SilentlyContinue
+        if ($d) { Write-Host ("$($c.Violet){0,-12}$($c.Reset) {1}  ({2:N0} GB free)" -f 'MODELS', $global:CS_MODEL_STORE, ($d.Free/1GB)) }
+    }
+    Write-Host ("$($c.Violet){0,-12}$($c.Reset) {1:N1} GB used / {2:N1} GB free" -f 'MEMORY',
+        (($os.TotalVisibleMemorySize-$os.FreePhysicalMemory)/1MB), ($os.FreePhysicalMemory/1MB))
     Write-Host ''
 }
 
-Set-Alias -Name rtco -Value rtco-status -Scope Global
+Set-Alias -Name scop -Value cs-status -Scope Global
 
-if (-not $env:RTCO_BANNER_SHOWN) {
-    $env:RTCO_BANNER_SHOWN = '1'
-    rtco-banner
+if (-not $env:CS_BANNER_SHOWN) {
+    $env:CS_BANNER_SHOWN = '1'
+    if (Get-Command Show-CsBanner -ErrorAction SilentlyContinue) { Show-CsBanner }
 }

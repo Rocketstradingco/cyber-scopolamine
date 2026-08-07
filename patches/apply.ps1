@@ -1,12 +1,3 @@
-# Reapplies the cyberpunk waiting-spinner + local model-picker patches to the
-# installed aider-chat package. Needed after any `uv tool upgrade aider-chat`
-# / reinstall, since these patches edit installed site-packages files
-# directly, not aider's own source.
-#
-# Windows port of apply.sh. Two differences from the server:
-#   - site-packages lives at <tool>\Lib\site-packages, not
-#     <tool>/lib/python3.12/site-packages
-#   - patch(1) comes from Git for Windows rather than the base system
 [CmdletBinding()]
 param([switch]$Revert)
 
@@ -39,6 +30,7 @@ $patches = @(
 )
 
 Write-Host "Applying to: $pkgRoot"
+$applied = 0; $already = 0; $failed = 0
 Push-Location $pkgRoot
 try {
     foreach ($p in $patches) {
@@ -47,11 +39,17 @@ try {
         if ($Revert) { $args += '--reverse' }
         Write-Host "  $p" -NoNewline
         $out = & $patchExe @args -i $file 2>&1
+        $text = ($out | Out-String)
         if ($LASTEXITCODE -eq 0) {
             Write-Host "  ok" -ForegroundColor Green
+            $applied++
+        } elseif ($text -match 'previously applied|Reversed \(or previously applied\)') {
+            Write-Host "  already applied" -ForegroundColor Cyan
+            $already++
         } else {
             Write-Host "  FAILED" -ForegroundColor Red
             $out | ForEach-Object { "    $_" }
+            $failed++
         }
     }
 } finally {
@@ -59,6 +57,11 @@ try {
 }
 
 Write-Host ''
-Write-Host "Done. Random cyberpunk waiting text should show on next aider run,"
-Write-Host "'/model' with no argument lists local Ollama aliases, and"
-Write-Host "'/model ' + Tab now arrow-completes through them (cloud models excluded)."
+if ($failed -gt 0) {
+    Write-Host "$failed patch(es) failed - aider works, but without the themed spinner." -ForegroundColor Red
+    Write-Host "This usually means aider is not the pinned version the patches target."
+    exit 1
+}
+Write-Host "Done ($applied applied, $already already in place)."
+Write-Host "The themed waiting animation shows on the next run, and '/model'"
+Write-Host "lists only your local models instead of thousands of cloud ones."
