@@ -43,6 +43,9 @@ function global:aider {
 
     if ($resident) {
         $speed = Get-CsTokensPerSecond -Model $model -TimeoutSec 30
+    } elseif (-not (Get-Command Start-ThreadJob -ErrorAction SilentlyContinue)) {
+        Write-Host "$($c.Violet)Speed: $($c.Reset) $($c.Cyan)...$($c.Reset) dosing the model into VRAM, this takes a few seconds"
+        $speed = Get-CsTokensPerSecond -Model $model -TimeoutSec 300
     } else {
         $job = Start-ThreadJob -ScriptBlock {
             param($m)
