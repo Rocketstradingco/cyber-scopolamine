@@ -9,10 +9,8 @@ if (-not (Test-Path $envFile)) {
     return
 }
 . $envFile
-foreach ($f in @('banner.ps1','prompt.ps1')) {
-    $p = Join-Path $cfg $f
-    if (Test-Path $p) { . $p }
-}
+$banner = Join-Path $cfg 'banner.ps1'
+if (Test-Path -LiteralPath $banner) { . $banner }
 
 $c = if (Get-Command Get-CsPalette -ErrorAction SilentlyContinue) { Get-CsPalette } else {
     @{ Reset=''; Bold=''; Violet=''; Cyan=''; Lime=''; White=''; Muted=''; Amber=''; Red=''; Orange='' }
@@ -35,9 +33,10 @@ function Test-CsUp {
     try { Invoke-WebRequest "$api/api/tags" -TimeoutSec 3 -UseBasicParsing | Out-Null; return $true } catch { return $false }
 }
 function Test-CsModel {
+    param([string]$Name = $Model)
     try {
         $t = Invoke-RestMethod "$api/api/tags" -TimeoutSec 4
-        return [bool]($t.models | Where-Object { $_.name -eq $Model })
+        return [bool]($t.models | Where-Object { $_.name -eq $Name })
     } catch { return $false }
 }
 function Start-CsOllama {
@@ -68,8 +67,8 @@ if (Get-Command Show-CsBanner -ErrorAction SilentlyContinue) { Show-CsBanner }
 
 Write-Host "$($c.Muted)-- $($c.Reset)$($c.Bold)$($c.Violet)CYBER-SCOPOLAMINE$($c.Reset) $($c.Muted)chat $('-' * 44)$($c.Reset)"
 Write-Host "$($c.Violet)Model: $($c.Reset) $Model $($c.Muted)(local, no API cost)$($c.Reset)"
-Write-Host "$($c.Violet)This is$($c.Reset) a plain conversation - it has no access to your files and"
-Write-Host "        writes nothing to disk. For editing code, run 'cyber-scopolamine'."
+Write-Host "$($c.Violet)This is$($c.Reset) a plain conversation - the model receives no file context."
+Write-Host "        It only writes a transcript when you explicitly use /save."
 Write-Host "$($c.Violet)Commands$($c.Reset) /exit  /clear  /model <name>  /save <file>"
 Write-Host "$($c.Muted)$('-' * 66)$($c.Reset)"
 Write-Host ''
@@ -140,12 +139,35 @@ while ($true) {
         continue
     }
     if ($line -match '^/model\s+(\S+)$') {
-        $Model = $Matches[1]
-        Write-Host "$($c.Muted)  model -> $Model$($c.Reset)"; Write-Host ''
+        $candidate = $Matches[1]
+        if (Test-CsModel -Name $candidate) {
+            $Model = $candidate
+            Write-Host "$($c.Muted)  model -> $Model$($c.Reset)"; Write-Host ''
+        } else {
+            Write-Host "$($c.Amber)  model '$candidate' is not available in the configured store$($c.Reset)"; Write-Host ''
+        }
         continue
     }
     if ($line -match '^/save\s+(.+)$') {
-        $path = $Matches[1]
+        $requestedPath = $Matches[1].Trim().Trim('"')
+        try { $path = [System.IO.Path]::GetFullPath($requestedPath) }
+        catch {
+            Write-Host "$($c.Amber)  invalid save path: $requestedPath$($c.Reset)"; Write-Host ''
+            continue
+        }
+        $parent = Split-Path -Parent $path
+        if (-not (Test-Path -LiteralPath $parent -PathType Container)) {
+            Write-Host "$($c.Amber)  folder does not exist: $parent$($c.Reset)"; Write-Host ''
+            continue
+        }
+        if (Test-Path -LiteralPath $path) {
+            Write-Host "$($c.Amber)  overwrite $path? [y/N]$($c.Reset) " -NoNewline
+            $answer = Read-Host
+            if ($answer.Trim().ToLowerInvariant() -notmatch '^y(es)?$') {
+                Write-Host "$($c.Muted)  save cancelled$($c.Reset)"; Write-Host ''
+                continue
+            }
+        }
         $dump = ($script:CsMessages | ForEach-Object { "$($_.role): $($_.content)" }) -join "`r`n`r`n"
         Set-Content -LiteralPath $path -Value $dump -Encoding UTF8
         Write-Host "$($c.Muted)  saved to $path$($c.Reset)"; Write-Host ''

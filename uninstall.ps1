@@ -31,6 +31,8 @@ $targets = @()
 if (Test-Path $cfgDir)  { $targets += $cfgDir }
 if (Test-Path $lnkPath) { $targets += $lnkPath }
 $cmds = @(Get-ChildItem "$binDir\$SLUG*" -ErrorAction SilentlyContinue)
+$scop = Join-Path $binDir 'scop.cmd'
+if (Test-Path -LiteralPath $scop) { $cmds += Get-Item -LiteralPath $scop }
 
 Write-Host ''
 Write-Host "$V CYBER-SCOPOLAMINE $R$M// uninstall$R"
