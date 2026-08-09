@@ -4,12 +4,11 @@ param()
 $ErrorActionPreference = 'Stop'
 
 $cfg = Join-Path $env:USERPROFILE '.config\cyber-scopolamine'
-$envFile = Join-Path $cfg 'cs-env.ps1'
-if (-not (Test-Path -LiteralPath $envFile)) {
-    Write-Host "Cyber-Scopolamine is not configured ($envFile missing). Re-run install.ps1." -ForegroundColor Red
-    exit 1
-}
-. $envFile
+$common = Join-Path $PSScriptRoot 'cyber-scopolamine-common.ps1'
+if (-not (Test-Path -LiteralPath $common)) { throw "Runtime helper is missing: $common. Re-run install.ps1." }
+. $common
+try { Import-CsConfig | Out-Null }
+catch { Write-Host $_.Exception.Message -ForegroundColor Red; exit 2 }
 
 $bannerFile = Join-Path $cfg 'banner.ps1'
 if (Test-Path -LiteralPath $bannerFile) { . $bannerFile }
@@ -32,16 +31,17 @@ try {
 } catch { }
 
 $model = 'not loaded'
-$ollamaUp = $false
+$ollamaUp = Test-CsEndpoint
 try {
+    $env:OLLAMA_HOST = $global:CS_OLLAMA_HOST
     $ps = & $global:CS_OLLAMA_EXE ps 2>$null | Select-Object -Skip 1
     if ($ps) { $model = ($ps | Select-Object -First 1) -replace '\s{2,}', '  ' }
-    $ollamaUp = [bool](Get-Process 'ollama' -ErrorAction SilentlyContinue)
 } catch { }
 Write-Host ("$($c.Violet){0,-12}$($c.Reset) {1}" -f 'MODEL', $model)
 
 $col = if ($ollamaUp) { $c.Lime } else { $c.Red }
 Write-Host ("$($c.Violet){0,-12}$($c.Reset) $col{1}$($c.Reset)" -f 'OLLAMA', $(if ($ollamaUp) { 'running' } else { 'stopped' }))
+Write-Host ("$($c.Violet){0,-12}$($c.Reset) {1}" -f 'ENDPOINT', $global:CS_OLLAMA_ENDPOINT)
 
 if ($global:CS_SANDBOX) {
     Write-Host ("$($c.Violet){0,-12}$($c.Reset) {1}" -f 'WORKSPACE', $global:CS_SANDBOX)

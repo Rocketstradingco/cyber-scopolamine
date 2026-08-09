@@ -1,21 +1,15 @@
 ﻿$ErrorActionPreference = 'Stop'
 
-$envFile = Join-Path $env:USERPROFILE '.config\cyber-scopolamine\cs-env.ps1'
-if (-not (Test-Path $envFile)) {
-    Write-Host "Cyber-Scopolamine is not configured ($envFile missing). Re-run install.ps1." -ForegroundColor Red
-    return
-}
-. $envFile
+$common = Join-Path $PSScriptRoot 'cyber-scopolamine-common.ps1'
+if (-not (Test-Path -LiteralPath $common)) { throw "Runtime helper is missing: $common. Re-run install.ps1." }
+. $common
+try { Import-CsConfig | Out-Null }
+catch { Write-Host $_.Exception.Message -ForegroundColor Red; exit 2 }
 
 $Sandbox = $global:CS_SANDBOX
 $Archive = Join-Path $Sandbox '.aider-history-archive'
 $Hist    = Join-Path $Sandbox '.aider.chat.history.md'
-$RestoreMarker = Join-Path $Sandbox '.aider-history-restore.pending'
-$historyLib = Join-Path $PSScriptRoot 'cyber-scopolamine-history-lib.ps1'
-if (-not (Test-Path -LiteralPath $historyLib)) {
-    throw "History support file is missing: $historyLib"
-}
-. $historyLib
+$RestoreMarker = Join-Path $Archive '.restore-pending'
 
 if (-not (Test-Path $Sandbox)) {
     Write-Host "Sandbox $Sandbox is missing - creating it." -ForegroundColor Yellow
@@ -25,47 +19,27 @@ if (-not (Test-Path $Sandbox)) {
 Set-Location $Sandbox
 New-Item -ItemType Directory -Force -Path $Archive | Out-Null
 
+$restorePending = Test-Path -LiteralPath $RestoreMarker
+if (-not $restorePending -and (Test-Path $Hist) -and (Get-Item $Hist).Length -gt 0) {
+    $archiveName = (Get-Date -Format 'yyyyMMdd-HHmmss-fff') + '-' + [guid]::NewGuid().ToString('N').Substring(0,8) + '.md'
+    Move-Item -LiteralPath $Hist -Destination (Join-Path $Archive $archiveName)
+}
+
 $env:OLLAMA_MODELS   = $global:CS_MODEL_STORE
-$env:OLLAMA_API_BASE = 'http://127.0.0.1:11434'
+$env:OLLAMA_HOST     = $global:CS_OLLAMA_HOST
+$env:OLLAMA_API_BASE = $global:CS_OLLAMA_ENDPOINT
 
 if (-not $env:OLLAMA_FLASH_ATTENTION) { $env:OLLAMA_FLASH_ATTENTION = '1' }
 
-$orphans = Get-CimInstance Win32_Process -Filter "Name='llama-server.exe'" -ErrorAction SilentlyContinue |
-    Where-Object { -not (Get-Process -Id $_.ParentProcessId -ErrorAction SilentlyContinue) }
-if ($orphans) {
-    Write-Host "Reaping $(@($orphans).Count) orphaned model runner(s) holding VRAM..." -ForegroundColor Yellow
-    $orphans | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
-    Start-Sleep -Seconds 2
-}
-
-function Test-CsModelVisible {
-    try {
-        $tags = Invoke-RestMethod 'http://127.0.0.1:11434/api/tags' -TimeoutSec 4
-        return [bool]($tags.models | Where-Object { $_.name -eq $global:CS_MODEL })
-    } catch { return $false }
-}
-
-function Start-CsOllama {
-    Start-Process -FilePath $global:CS_OLLAMA_EXE -ArgumentList 'serve' -WindowStyle Hidden
-    for ($i = 0; $i -lt 30; $i++) {
-        Start-Sleep -Seconds 1
-        try { Invoke-WebRequest 'http://127.0.0.1:11434/api/tags' -TimeoutSec 2 -UseBasicParsing | Out-Null; return $true } catch { }
+try {
+    Assert-CsDedicatedEndpointAvailable
+    if (-not (Test-CsEndpoint)) {
+        Write-Host "Starting Cyber-Scopolamine's dedicated Ollama server at $($global:CS_OLLAMA_ENDPOINT)..." -ForegroundColor Yellow
+        Start-CsOwnedOllama | Out-Null
     }
-    return $false
-}
-
-$serverUp = $false
-try { Invoke-WebRequest 'http://127.0.0.1:11434/api/tags' -TimeoutSec 3 -UseBasicParsing | Out-Null; $serverUp = $true } catch { }
-if (-not $serverUp) {
-    Write-Host 'Ollama is not responding on 127.0.0.1:11434 - starting it...' -ForegroundColor Yellow
-    $serverUp = Start-CsOllama
-}
-
-if ($serverUp -and -not (Test-CsModelVisible)) {
-    Write-Host "Ollama is running against a different model store - restarting it..." -ForegroundColor Yellow
-    Get-Process 'ollama','llama-server' -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
-    Start-Sleep -Seconds 2
-    $serverUp = Start-CsOllama
+} catch {
+    Write-Host $_.Exception.Message -ForegroundColor Red
+    exit 3
 }
 
 if (-not (Test-CsModelVisible)) {
@@ -77,7 +51,7 @@ if (-not (Test-CsModelVisible)) {
     Write-Host "    ollama create $($global:CS_MODEL -replace ':latest$','') -f <Modelfile>" -ForegroundColor Yellow
     Write-Host '  or re-run install.ps1, which will pull and build it for you.'
     Write-Host ''
-    return
+    exit 4
 }
 
 foreach ($rc in @(
@@ -88,17 +62,14 @@ foreach ($rc in @(
     if (Test-Path $rc) { . $rc }
 }
 
+if ($restorePending) { Remove-Item -LiteralPath $RestoreMarker -Force -ErrorAction SilentlyContinue }
+
 $introMarker = Join-Path $env:USERPROFILE '.config\cyber-scopolamine\.intro-shown'
 $introScript = Join-Path $env:USERPROFILE '.config\cyber-scopolamine\intro.ps1'
 if ((-not (Test-Path $introMarker)) -and (Test-Path $introScript)) {
     . $introScript
     try { Show-CsIntro } catch { }
     New-Item -ItemType File -Path $introMarker -Force | Out-Null
-}
-
-$historyState = Complete-CsHistoryLaunchPreparation -HistoryPath $Hist -ArchiveDirectory $Archive -MarkerPath $RestoreMarker
-if ($historyState -eq 'restored') {
-    Write-Host 'Restoring the selected archived conversation.' -ForegroundColor Cyan
 }
 
 aider @args

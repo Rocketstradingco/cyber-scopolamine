@@ -5,9 +5,12 @@ param(
     [string]$SandboxPath,
     [string]$ModelStorePath,
     [string]$Model,
+    [string]$AgentModel,
     [int]$NumCtx,
+    [ValidateRange(1024,65535)][int]$OllamaPort = 11435,
     [switch]$SkipModelPull,
-    [switch]$KeepOllamaAutoUpdate
+    [switch]$DisableOllamaAutoUpdate,
+    [switch]$UseExistingSandbox
 )
 
 $ErrorActionPreference = 'Stop'
@@ -209,8 +212,38 @@ function Get-PatchExe {
     return $null
 }
 
+function Resolve-CsPath {
+    param([Parameter(Mandatory=$true)][string]$Path, [string]$Label = 'Path')
+    if ([string]::IsNullOrWhiteSpace($Path)) { throw "$Label cannot be empty." }
+    $expanded = [Environment]::ExpandEnvironmentVariables($Path.Trim())
+    if (-not [IO.Path]::IsPathRooted($expanded)) { throw "$Label must be an absolute path: $Path" }
+    $full = [IO.Path]::GetFullPath($expanded).TrimEnd('\')
+    $root = [IO.Path]::GetPathRoot($full).TrimEnd('\')
+    if ($full.Equals($root, [StringComparison]::OrdinalIgnoreCase)) { throw "$Label cannot be a drive root: $full" }
+    return $full
+}
+
+function Test-CsPathOverlap {
+    param([string]$Left, [string]$Right)
+    $a = $Left.TrimEnd('\')
+    $b = $Right.TrimEnd('\')
+    return $a.Equals($b, [StringComparison]::OrdinalIgnoreCase) -or
+           $a.StartsWith($b + '\', [StringComparison]::OrdinalIgnoreCase) -or
+           $b.StartsWith($a + '\', [StringComparison]::OrdinalIgnoreCase)
+}
+
+function Invoke-CsNative {
+    param([Parameter(Mandatory=$true)][string]$FilePath, [string[]]$Arguments, [string]$FailureMessage)
+    & $FilePath @Arguments
+    if ($LASTEXITCODE -ne 0) {
+        if (-not $FailureMessage) { $FailureMessage = "$FilePath failed" }
+        throw "$FailureMessage (exit code $LASTEXITCODE)."
+    }
+}
+
 $SrcRoot = if ($PSScriptRoot -and (Test-Path (Join-Path $PSScriptRoot 'config\banner.ps1'))) { $PSScriptRoot } else { $null }
 if ($SrcRoot) {
+    . (Join-Path $SrcRoot 'bin\cyber-scopolamine-common.ps1')
     . (Join-Path $SrcRoot 'config\banner.ps1')
     Show-CsBanner
 } else {
@@ -288,14 +321,19 @@ Write-Info 'A model bigger than VRAM does not error - it silently spills into'
 Write-Info 'system RAM and runs about 5x slower, so this errs on the small side.'
 Write-Ok "Recommended: $($C.Bold)$($plan.Label)$($C.Reset)  $($C.Muted)->$($C.Reset) $($plan.Base)"
 
-if (-not $Model)  { $Model  = $plan.Base }
-if (-not $NumCtx) { $NumCtx = $plan.Ctx }
-$AgentModel = $plan.Agent
+if (-not $Model)      { $Model = $plan.Base }
+if (-not $NumCtx)     { $NumCtx = $plan.Ctx }
+if (-not $AgentModel) { $AgentModel = $plan.Agent }
 if (-not $Unattended -and -not (Confirm-Step "Use $($plan.Label)?")) {
     $Model      = Read-Default 'Ollama model to pull' $plan.Base
     $NumCtx     = [int](Read-Default 'Context window (num_ctx)' $plan.Ctx)
     $AgentModel = Read-Default 'Name for the local -agent build' $plan.Agent
 }
+if ($NumCtx -lt 512 -or $NumCtx -gt 131072) { throw 'Context window must be between 512 and 131072.' }
+$modelPattern = '^[A-Za-z0-9][A-Za-z0-9._/-]*(?::[A-Za-z0-9][A-Za-z0-9._-]*)?$'
+if ($Model -notmatch $modelPattern) { throw "Invalid Ollama model reference: $Model" }
+if ($AgentModel -notmatch $modelPattern) { throw "Invalid local model reference: $AgentModel" }
+$AgentModelRef = if ($AgentModel -match ':') { $AgentModel } else { "$AgentModel`:latest" }
 
 Write-Step 'Choosing locations'
 Write-Info "Put both on your fastest drive. Model load time is dominated by disk:"
@@ -312,13 +350,34 @@ if (-not $ModelStorePath) {
         $ModelStorePath = Read-Default 'Model store (needs 10-25 GB)' "$($fastest.Letter):\$SLUG\models"
     }
 }
+$SandboxPath = Resolve-CsPath -Path $SandboxPath -Label 'Sandbox path'
+$ModelStorePath = Resolve-CsPath -Path $ModelStorePath -Label 'Model store path'
+if (Test-CsPathOverlap -Left $SandboxPath -Right $ModelStorePath) {
+    throw 'Sandbox and model store paths must be separate and cannot contain one another.'
+}
+$cfgDirPreview = Join-Path $env:USERPROFILE ".config\$SLUG"
+if ((Test-CsPathOverlap -Left $SandboxPath -Right $cfgDirPreview) -or
+    (Test-CsPathOverlap -Left $ModelStorePath -Right $cfgDirPreview)) {
+    throw 'Sandbox and model store paths cannot overlap the Cyber-Scopolamine config directory.'
+}
+$existingConfig = Read-CsJsonFile -Path (Join-Path $cfgDirPreview 'config.json')
+$sandboxWasNonEmpty = (Test-Path -LiteralPath $SandboxPath -PathType Container) -and
+    @(Get-ChildItem -LiteralPath $SandboxPath -Force -ErrorAction SilentlyContinue).Count -gt 0
+if ($sandboxWasNonEmpty -and
+    -not $UseExistingSandbox -and
+    -not ($existingConfig -and ([string]$existingConfig.sandbox).Equals($SandboxPath, [StringComparison]::OrdinalIgnoreCase))) {
+    throw "Sandbox is not empty: $SandboxPath. Re-run with -UseExistingSandbox to use it without changing existing project files."
+}
+$OllamaHost = "127.0.0.1:$OllamaPort"
+$OllamaEndpoint = "http://$OllamaHost"
 
 Write-Step 'Ready'
 Write-Host "    $($C.Muted)Model      $($C.Reset) $Model"
-Write-Host "    $($C.Muted)Local build$($C.Reset) $AgentModel  ($NumCtx ctx)"
+Write-Host "    $($C.Muted)Local build$($C.Reset) $AgentModelRef  ($NumCtx ctx)"
 Write-Host "    $($C.Muted)Backend    $($C.Reset) $($gpu.Backend)  ($($gpu.Vendor))"
 Write-Host "    $($C.Muted)Sandbox    $($C.Reset) $SandboxPath"
 Write-Host "    $($C.Muted)Model store$($C.Reset) $ModelStorePath"
+Write-Host "    $($C.Muted)Endpoint   $($C.Reset) $OllamaEndpoint  (dedicated)"
 Write-Host "    $($C.Muted)aider      $($C.Reset) $AIDER_VERSION (pinned)"
 Write-Host "    $($C.Muted)Shortcut   $($C.Reset) Desktop -> '$APP_NAME'"
 Write-Host ''
@@ -357,7 +416,12 @@ New-Item -ItemType Directory -Force -Path $cfgDir | Out-Null
 $privateAider = Join-Path $venvDir 'Scripts\aider.exe'
 $havePrivate  = $false
 if (Test-Path $privateAider) {
-    try { $havePrivate = (((& $privateAider --version 2>&1) -join ' ') -match [regex]::Escape($AIDER_VERSION)) } catch { }
+    try {
+        $privateVersionText = ((& $privateAider --version 2>&1) -join ' ')
+        if ($LASTEXITCODE -eq 0 -and $privateVersionText -match '(\d+\.\d+\.\d+)') {
+            $havePrivate = ([version]$Matches[1] -eq [version]$AIDER_VERSION)
+        }
+    } catch { }
 }
 
 if ($havePrivate) {
@@ -366,10 +430,17 @@ if ($havePrivate) {
     if ($aiderVer) { Write-Info "You have aider $aiderVer installed - leaving it untouched." }
     Write-Info "Installing a private aider $AIDER_VERSION into $venvDir ..."
     & $uvExe venv $venvDir 2>&1 | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw "uv could not create the private environment (exit code $LASTEXITCODE)." }
     $venvPy = Join-Path $venvDir 'Scripts\python.exe'
     if (-not (Test-Path $venvPy)) { throw "Could not create the private environment at $venvDir" }
     & $uvExe pip install --python $venvPy "aider-chat==$AIDER_VERSION" 2>&1 | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw "uv could not install aider $AIDER_VERSION (exit code $LASTEXITCODE)." }
     if (-not (Test-Path $privateAider)) { throw 'Private aider install failed.' }
+    $installedAiderText = ((& $privateAider --version 2>&1) -join ' ')
+    if ($LASTEXITCODE -ne 0 -or $installedAiderText -notmatch '(\d+\.\d+\.\d+)' -or
+        [version]$Matches[1] -ne [version]$AIDER_VERSION) {
+        throw "Private aider version verification failed: $installedAiderText"
+    }
     Write-Ok "private aider $AIDER_VERSION installed (your own aider is unchanged)"
 }
 $aiderExe = $privateAider
@@ -378,32 +449,47 @@ Write-Step 'Creating folders and configuration'
 $cfgDir   = Join-Path $env:USERPROFILE ".config\$SLUG"
 $binDir   = Join-Path $env:USERPROFILE '.local\bin'
 $patchDir = Join-Path $cfgDir 'patches'
-$sandboxWasNonEmpty = (Test-Path -LiteralPath $SandboxPath) -and
-    [bool](Get-ChildItem -LiteralPath $SandboxPath -Force -ErrorAction SilentlyContinue | Select-Object -First 1)
 foreach ($d in @($cfgDir,$binDir,$patchDir,$ModelStorePath,$SandboxPath,(Join-Path $SandboxPath '.aider-history-archive'))) {
     New-Item -ItemType Directory -Force -Path $d | Out-Null
 }
 
-$envText = @"
-# Generated by the $APP_NAME installer on $(Get-Date -Format 'yyyy-MM-dd HH:mm').
-# Machine-specific values - every script reads these, so nothing hardcodes a
-# path. Edit here to move things.
-`$global:CS_SANDBOX     = '$SandboxPath'
-`$global:CS_MODEL       = '$AgentModel`:latest'
-`$global:CS_MODEL_STORE = '$ModelStorePath'
-`$global:CS_OLLAMA_EXE  = '$ollamaExe'
-`$global:CS_AIDER_EXE   = '$aiderExe'
-`$global:CS_NUM_CTX     = $NumCtx
-`$global:CS_BACKEND     = '$($gpu.Backend)'
-"@
+$aiderConfig = Join-Path $cfgDir 'aider.conf.yml'
+$configPath = Join-Path $cfgDir 'config.json'
+$statePath = Join-Path $cfgDir 'install-state.json'
+$processStatePath = Join-Path $cfgDir 'ollama-process.json'
 
-[System.IO.File]::WriteAllText(
-    (Join-Path $cfgDir 'cs-env.ps1'), $envText,
-    (New-Object System.Text.UTF8Encoding($true)))
+if ($existingConfig -and
+    (([string]$existingConfig.modelStore -ne $ModelStorePath) -or
+     ([string]$existingConfig.ollamaEndpoint -ne $OllamaEndpoint) -or
+     ([string]$existingConfig.ollamaExe -ne [string]$ollamaExe))) {
+    $global:CS_OLLAMA_EXE = [string]$existingConfig.ollamaExe
+    Stop-CsOwnedOllama -ProcessStatePath $processStatePath -ExpectedExe $global:CS_OLLAMA_EXE | Out-Null
+}
+
+$config = [ordered]@{
+    schemaVersion = 1
+    appVersion = $CS_VERSION
+    sandbox = $SandboxPath
+    model = $AgentModelRef
+    modelStore = $ModelStorePath
+    ollamaExe = [IO.Path]::GetFullPath($ollamaExe)
+    aiderExe = [IO.Path]::GetFullPath($aiderExe)
+    aiderConfig = $aiderConfig
+    numCtx = $NumCtx
+    backend = $gpu.Backend
+    ollamaHost = $OllamaHost
+    ollamaEndpoint = $OllamaEndpoint
+}
+Write-CsJsonFile -Path $configPath -Value $config
+$legacyEnv = Join-Path $cfgDir 'cs-env.ps1'
+if (Test-Path -LiteralPath $legacyEnv) { Remove-Item -LiteralPath $legacyEnv -Force }
+Import-CsConfig -Path $configPath | Out-Null
 
 foreach ($f in @('banner.ps1','prompt.ps1','aider-startup.ps1','intro.ps1')) {
     Copy-Item (Join-Path $SrcRoot "config\$f") (Join-Path $cfgDir $f) -Force
 }
+$conf = (Get-Content (Join-Path $SrcRoot 'config\aider.conf.yml.template') -Raw).Replace('{{MODEL}}', $AgentModelRef)
+[System.IO.File]::WriteAllText($aiderConfig, $conf, (New-Object System.Text.UTF8Encoding($false)))
 $iconSrc = Join-Path $SrcRoot 'assets\cyber-scopolamine.ico'
 $iconDst = Join-Path $cfgDir 'cyber-scopolamine.ico'
 if (Test-Path $iconSrc) { Copy-Item $iconSrc $iconDst -Force }
@@ -412,12 +498,43 @@ Copy-Item (Join-Path $SrcRoot 'patches\*') $patchDir -Force
 Write-Ok "config  -> $cfgDir"
 Write-Ok "tools   -> $binDir"
 
+$previousState = Read-CsJsonFile -Path $statePath
 $userPath = [Environment]::GetEnvironmentVariable('PATH','User')
-if ($userPath -notlike "*$binDir*") {
+$userPathEntries = @($userPath -split [IO.Path]::PathSeparator | Where-Object { $_ })
+$pathAddedNow = -not [bool]($userPathEntries | Where-Object {
+    try { [IO.Path]::GetFullPath($_).TrimEnd('\').Equals([IO.Path]::GetFullPath($binDir).TrimEnd('\'), [StringComparison]::OrdinalIgnoreCase) }
+    catch { $false }
+})
+if ($pathAddedNow) {
     [Environment]::SetEnvironmentVariable('PATH', "$binDir;$userPath", 'User')
     Write-Ok "added $binDir to PATH"
 }
 $env:PATH = "$binDir;$env:PATH"
+
+$pathOwned = $pathAddedNow -or [bool]($previousState -and $previousState.pathAdded)
+$updaterState = if ($previousState -and $previousState.updater) { $previousState.updater } else {
+    [ordered]@{
+        enabled = $false
+        trayRenamed = $false
+        appExe = (Join-Path $env:LOCALAPPDATA 'Programs\Ollama\ollama app.exe')
+        disabledExe = (Join-Path $env:LOCALAPPDATA 'Programs\Ollama\ollama app.exe.disabled')
+        updatesPath = (Join-Path $env:LOCALAPPDATA 'Ollama\updates_v2')
+        updatesDirectoryCreated = $false
+        originalUpdatesAclSddl = $null
+    }
+}
+$installState = [ordered]@{
+    schemaVersion = 1
+    appVersion = $CS_VERSION
+    installedAtUtc = (Get-Date).ToUniversalTime().ToString('o')
+    configPath = $configPath
+    binDirectory = $binDir
+    desktopShortcut = (Join-Path ([Environment]::GetFolderPath('Desktop')) "$APP_NAME.lnk")
+    pathAdded = $pathOwned
+    ollamaProcessState = $processStatePath
+    updater = $updaterState
+}
+Write-CsJsonFile -Path $statePath -Value $installState
 
 Write-Step 'Applying the themed aider patches'
 if ($patchExe) {
@@ -434,94 +551,89 @@ if ($patchExe) {
 }
 
 Write-Step 'Building the sandbox'
-$conf = (Get-Content (Join-Path $SrcRoot 'config\aider.conf.yml.template') -Raw).Replace('{{MODEL}}', "$AgentModel`:latest")
-$managedAiderConfig = Join-Path $cfgDir 'aider.conf.yml'
-$gitIgnoreBlock = @'
-# Cyber-Scopolamine managed ignores
+$gitIgnore = @'
 .aider-history-archive/
-.aider-history-restore.pending
 .aider.chat.history.md
 .aider.input.history
 .aider.tags.cache.v*/
 '@
 
 $noBom = New-Object System.Text.UTF8Encoding($false)
-[System.IO.File]::WriteAllText($managedAiderConfig, $conf, $noBom)
-$gitIgnorePath = Join-Path $SandboxPath '.gitignore'
-if (-not (Test-Path -LiteralPath $gitIgnorePath)) {
-    [System.IO.File]::WriteAllText($gitIgnorePath, $gitIgnoreBlock, $noBom)
-} else {
-    $existingIgnore = Get-Content -LiteralPath $gitIgnorePath -Raw
-    if ($existingIgnore -notmatch '(?m)^# Cyber-Scopolamine managed ignores$') {
-        $separator = if ($existingIgnore.EndsWith("`n")) { '' } else { "`r`n" }
-        [System.IO.File]::AppendAllText($gitIgnorePath, "$separator$gitIgnoreBlock", $noBom)
-    }
-}
 if ($gitExe -and -not (Test-Path (Join-Path $SandboxPath '.git'))) {
     if ($sandboxWasNonEmpty) {
-        Write-Warn2 'existing nonempty workspace is not a git repository - leaving it unchanged'
+        Write-Warn2 'existing nonempty sandbox is not a git repository - leaving it unchanged'
     } else {
-        & git -C $SandboxPath init -b main *>&1 | Out-Null
-        if ($LASTEXITCODE -ne 0) { throw 'Could not initialize the workspace as a git repository.' }
-        Write-Ok 'workspace initialised as a git repo'
+        & $gitExe -C $SandboxPath init -b main *>&1 | Out-Null
+        if ($LASTEXITCODE -ne 0) { throw "Could not initialise the sandbox git repository (exit code $LASTEXITCODE)." }
+        Write-Ok 'sandbox initialised as a git repo'
     }
 }
-Write-Ok "workspace -> $SandboxPath"
+if (Test-Path -LiteralPath (Join-Path $SandboxPath '.git')) {
+    $excludePath = Join-Path $SandboxPath '.git\info\exclude'
+    $excludeDir = Split-Path -Parent $excludePath
+    New-Item -ItemType Directory -Force -Path $excludeDir | Out-Null
+    $existingExclude = if (Test-Path -LiteralPath $excludePath) { Get-Content -LiteralPath $excludePath -Raw } else { '' }
+    $missingExcludes = @($gitIgnore -split "`r?`n" | Where-Object {
+        $_ -and $existingExclude -notmatch ('(?m)^{0}$' -f [regex]::Escape($_))
+    })
+    if ($missingExcludes.Count -gt 0) {
+        $separator = if ($existingExclude -and -not $existingExclude.EndsWith("`n")) { "`r`n" } else { '' }
+        $excludeText = $separator + ($missingExcludes -join "`r`n") + "`r`n"
+        [IO.File]::AppendAllText($excludePath, $excludeText, $noBom)
+    }
+}
+Write-Ok "sandbox -> $SandboxPath"
 
 if (-not $SkipModelPull) {
     Write-Step "Downloading the model ($Model)"
     Write-Info 'Several GB. Resumes if interrupted.'
     $env:OLLAMA_MODELS = $ModelStorePath
-
-    $up = $false
-    try { Invoke-WebRequest 'http://127.0.0.1:11434/api/tags' -TimeoutSec 3 -UseBasicParsing | Out-Null; $up = $true } catch { }
-
-    if ($up) {
-        $runningStore = Get-RunningOllamaStore
-        if ($runningStore -and ($runningStore.TrimEnd('\') -ne $ModelStorePath.TrimEnd('\'))) {
-            Write-Info "Ollama is running against $runningStore - restarting it on $ModelStorePath"
-            Get-Process 'ollama','llama-server' -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
-            Start-Sleep -Seconds 2
-            $up = $false
-        } else {
-            Write-Info 'Ollama is already running against this store - leaving it alone.'
-        }
+    $env:OLLAMA_HOST = $OllamaHost
+    Assert-CsDedicatedEndpointAvailable -Endpoint $OllamaEndpoint -ProcessStatePath $processStatePath -ExpectedExe $ollamaExe
+    if (-not (Test-CsEndpoint -Endpoint $OllamaEndpoint)) {
+        Start-CsOwnedOllama -Exe $ollamaExe -ModelStore $ModelStorePath -HostAddress $OllamaHost -Endpoint $OllamaEndpoint -ProcessStatePath $processStatePath | Out-Null
     }
-    if (-not $up) {
-        Start-Process -FilePath $ollamaExe -ArgumentList 'serve' -WindowStyle Hidden
-        for ($i=0; $i -lt 30; $i++) { Start-Sleep -Seconds 1; try { Invoke-WebRequest 'http://127.0.0.1:11434/api/tags' -TimeoutSec 2 -UseBasicParsing | Out-Null; $up=$true; break } catch { } }
-    }
-    if (-not $up) { throw 'Ollama did not start - cannot pull the model.' }
     & $ollamaExe pull $Model
     if ($LASTEXITCODE -ne 0) { throw "Model pull failed for $Model" }
     Write-Ok 'model downloaded'
 
     Write-Step "Building the local variant ($AgentModel, num_ctx $NumCtx)"
 
-    $mf = Join-Path $env:TEMP "$AgentModel.Modelfile"
+    $mf = Join-Path $env:TEMP ("cyber-scopolamine-" + [guid]::NewGuid().ToString('N') + '.Modelfile')
     "FROM $Model`n`nPARAMETER num_ctx $NumCtx`n" | Set-Content -Path $mf -Encoding ascii
-    & $ollamaExe create $AgentModel -f $mf | Out-Null
+    & $ollamaExe create $AgentModelRef -f $mf | Out-Null
+    $createExit = $LASTEXITCODE
     Remove-Item $mf -Force -ErrorAction SilentlyContinue
+    if ($createExit -ne 0) { throw "Model create failed for $AgentModelRef (exit code $createExit)." }
 
     $visible = $false
     try {
-        $tags = Invoke-RestMethod 'http://127.0.0.1:11434/api/tags' -TimeoutSec 5
-        $visible = [bool]($tags.models | Where-Object { $_.name -eq "$AgentModel`:latest" })
+        $tags = Invoke-RestMethod "$OllamaEndpoint/api/tags" -TimeoutSec 5
+        $visible = [bool]($tags.models | Where-Object { $_.name -eq $AgentModelRef })
     } catch { }
     if (-not $visible) {
-        throw "Built $AgentModel but Ollama cannot see it in $ModelStorePath. The install would fail at first launch, so stopping here."
+        throw "Built $AgentModelRef but Ollama cannot see it in $ModelStorePath. The install would fail at first launch, so stopping here."
     }
-    Write-Ok "created $AgentModel and confirmed Ollama can load it"
+    Write-Ok "created $AgentModelRef and confirmed Ollama can load it"
+} else {
+    $env:OLLAMA_MODELS = $ModelStorePath
+    $env:OLLAMA_HOST = $OllamaHost
+    Assert-CsDedicatedEndpointAvailable -Endpoint $OllamaEndpoint -ProcessStatePath $processStatePath -ExpectedExe $ollamaExe
+    if (-not (Test-CsEndpoint -Endpoint $OllamaEndpoint)) {
+        Start-CsOwnedOllama -Exe $ollamaExe -ModelStore $ModelStorePath -HostAddress $OllamaHost -Endpoint $OllamaEndpoint -ProcessStatePath $processStatePath | Out-Null
+    }
+    if (-not (Test-CsModelVisible -Model $AgentModelRef -Endpoint $OllamaEndpoint)) {
+        throw "-SkipModelPull was requested, but $AgentModelRef is not present in the configured model store."
+    }
+    Write-Ok "existing model confirmed: $AgentModelRef"
 }
 
 Write-Step 'Ollama auto-update'
-if (-not $KeepOllamaAutoUpdate) {
-    Write-Info 'Ollama self-updates silently, and 0.23.x builds crash at startup'
-    Write-Info 'on AMD cards - taking the whole agent down with no warning.'
-    if (Confirm-Step 'Disable Ollama auto-update? (recommended)') {
-        & (Join-Path $binDir 'cyber-scopolamine-noupdate.ps1') | ForEach-Object { Write-Info $_ }
-    }
-}
+if ($DisableOllamaAutoUpdate) {
+    Write-Info 'Explicitly disabling Ollama auto-update; this change is recorded and reversible.'
+    & (Join-Path $binDir 'cyber-scopolamine-noupdate.ps1') | ForEach-Object { Write-Info $_ }
+    if ($LASTEXITCODE -ne 0) { throw "Could not disable Ollama auto-update (exit code $LASTEXITCODE)." }
+} else { Write-Ok 'left Ollama auto-update unchanged (use -DisableOllamaAutoUpdate to opt in)' }
 
 Write-Step 'Creating the desktop icon'
 $desktop  = [Environment]::GetFolderPath('Desktop')
@@ -556,7 +668,7 @@ Write-Host "  $($C.Violet)Start$($C.Reset)         double-click $($C.Bold)$APP_N
 Write-Host "  $($C.Violet)Or$($C.Reset)            run $($C.Cyan)cyber-scopolamine$($C.Reset) in a $($C.Bold)new$($C.Reset) terminal"
 Write-Host "                $($C.Muted)(terminals already open won't have it on PATH yet)$($C.Reset)"
 Write-Host "  $($C.Violet)Sandbox$($C.Reset)       $SandboxPath $($C.Muted)(the only folder it can edit)$($C.Reset)"
-Write-Host "  $($C.Violet)Model$($C.Reset)         $AgentModel $($C.Muted)($NumCtx ctx, $($gpu.Backend), fully offline)$($C.Reset)"
+Write-Host "  $($C.Violet)Model$($C.Reset)         $AgentModelRef $($C.Muted)($NumCtx ctx, $($gpu.Backend), fully offline)$($C.Reset)"
 Write-Host "  $($C.Violet)Old chats$($C.Reset)     $($C.Cyan)cyber-scopolamine-history$($C.Reset) list | view <n> | load <n>"
 Write-Host "  $($C.Violet)Status$($C.Reset)        $($C.Cyan)scop$($C.Reset)  (alias for cs-status)"
 Write-Host ''
