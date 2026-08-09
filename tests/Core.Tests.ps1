@@ -1,7 +1,9 @@
-$repoRoot = Split-Path -Parent $PSScriptRoot
-$historyCommand = Join-Path $repoRoot 'bin\cyber-scopolamine-history.ps1'
-
 Describe 'Cyber-Scopolamine history restore contract' {
+    BeforeEach {
+        $script:repoRoot = Split-Path -Parent $PSScriptRoot
+        $script:historyCommand = Join-Path $script:repoRoot 'bin\cyber-scopolamine-history.ps1'
+    }
+
     It 'marks a selected archive so the next launch restores it' {
         $profileRoot = Join-Path $TestDrive 'profile'
         $configDirectory = Join-Path $profileRoot '.config\cyber-scopolamine'
@@ -28,20 +30,34 @@ Describe 'Cyber-Scopolamine history restore contract' {
         $oldProfile = $env:USERPROFILE
         try {
             $env:USERPROFILE = $profileRoot
-            & $historyCommand load 1 | Out-Null
+            & $script:historyCommand load 1 | Out-Null
         } finally {
             $env:USERPROFILE = $oldProfile
         }
 
-        Test-Path -LiteralPath (Join-Path $archive '.restore-pending') | Should Be $true
-        (Get-Content -LiteralPath (Join-Path $workspace '.aider.chat.history.md') -Raw).Trim() | Should Be 'selected chat'
+        if (-not (Test-Path -LiteralPath (Join-Path $archive '.restore-pending'))) {
+            throw 'History restore marker was not created.'
+        }
+        if ((Get-Content -LiteralPath (Join-Path $workspace '.aider.chat.history.md') -Raw).Trim() -ne 'selected chat') {
+            throw 'Selected history was not copied to the active history file.'
+        }
     }
 }
 
 Describe 'Installed command contract' {
+    BeforeEach {
+        $script:repoRoot = Split-Path -Parent $PSScriptRoot
+    }
+
     It 'ships standalone status entry points' {
-        Test-Path -LiteralPath (Join-Path $repoRoot 'bin\cyber-scopolamine-status.ps1') | Should Be $true
-        Test-Path -LiteralPath (Join-Path $repoRoot 'bin\cyber-scopolamine-status.cmd') | Should Be $true
-        Test-Path -LiteralPath (Join-Path $repoRoot 'bin\scop.cmd') | Should Be $true
+        foreach ($relativePath in @(
+            'bin\cyber-scopolamine-status.ps1',
+            'bin\cyber-scopolamine-status.cmd',
+            'bin\scop.cmd'
+        )) {
+            if (-not (Test-Path -LiteralPath (Join-Path $script:repoRoot $relativePath))) {
+                throw "Missing installed command entry point: $relativePath"
+            }
+        }
     }
 }

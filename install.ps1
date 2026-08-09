@@ -258,8 +258,8 @@ if ($SrcRoot) {
     Write-Host "  $($C.Cyan)Fix:$($C.Reset) extract the whole cyber-scopolamine folder from the ZIP,"
     Write-Host "  then double-click $($C.Bold)Install Cyber-Scopolamine.bat$($C.Reset) inside it."
     Write-Host ''
-    Write-Host "  $($C.Muted)This is a private project, so there is no public download link$($C.Reset)"
-    Write-Host "  $($C.Muted)to fall back to. See INSTALL.txt for step-by-step instructions.$($C.Reset)"
+    Write-Host "  $($C.Muted)The installer needs the complete repository folder; it cannot run$($C.Reset)"
+    Write-Host "  $($C.Muted)as a standalone script. See INSTALL.txt for step-by-step instructions.$($C.Reset)"
     Write-Host ''
     return
 }
@@ -292,7 +292,7 @@ $ollamaExe = Get-OllamaExe
 $ollamaVer = Get-OllamaVersion -Exe $ollamaExe
 $uvExe     = (Get-Command uv -ErrorAction SilentlyContinue).Source
 if (-not $uvExe) { $p = Join-Path $env:USERPROFILE '.local\bin\uv.exe'; if (Test-Path $p) { $uvExe = $p } }
-$aiderExe  = Join-Path $env:USERPROFILE '.local\bin\aider.exe'
+$aiderExe  = Join-Path $env:USERPROFILE ".config\$SLUG\aider-env\Scripts\aider.exe"
 $aiderVer  = if (Test-Path $aiderExe) { try { (((& $aiderExe --version 2>&1) -join ' ') -replace '.*?(\d+\.\d+\.\d+).*','$1') } catch { $null } } else { $null }
 $patchExe  = Get-PatchExe
 $gitExe    = (Get-Command git -ErrorAction SilentlyContinue).Source
@@ -308,11 +308,11 @@ elseif ($ollamaVer)                             { Write-Need "Ollama $ollamaVer 
 else                                            { Write-Need 'Ollama - will download and install (~1.5 GB)' }
 
 if ($uvExe)  { Write-Have "uv ($uvExe)" } else { Write-Need 'uv (Python tool manager) - will install' }
-if ($aiderVer -eq $AIDER_VERSION) { Write-Have "aider $aiderVer" }
-elseif ($aiderVer)                { Write-Need "aider $aiderVer -> will pin to $AIDER_VERSION (the patches target it)" }
-else                              { Write-Need "aider $AIDER_VERSION - will install" }
+if ($aiderVer -eq $AIDER_VERSION) { Write-Have "private aider $aiderVer" }
+elseif ($aiderVer)                { Write-Need "private aider $aiderVer -> will pin to $AIDER_VERSION (the patches target it)" }
+else                              { Write-Need "private aider $AIDER_VERSION - will install" }
 if ($patchExe) { Write-Have "patch.exe ($patchExe)" } else { Write-Warn2 'patch.exe missing (ships with Git for Windows) - themed spinner will be skipped' }
-if ($gitExe)   { Write-Have "git ($gitExe)" }         else { Write-Warn2 'git missing - the sandbox will not be a repo' }
+if ($gitExe)   { Write-Have "git ($gitExe)" }         else { Write-Warn2 'git missing - the workspace will not be a repo' }
 
 Write-Step 'Choosing a model that fits your card'
 $plan = Get-ModelPlan -VramGB $gpu.VramGB
@@ -339,7 +339,7 @@ Write-Step 'Choosing locations'
 Write-Info "Put both on your fastest drive. Model load time is dominated by disk:"
 Write-Info "measured ~9s from NVMe versus ~57s from a spinning HDD."
 Write-Ok "Fastest drive with room: $($C.Bold)$($fastest.Letter):$($C.Reset) ($($fastest.Class), $($fastest.FreeGB) GB free)"
-if (-not $SandboxPath) { $SandboxPath = Read-Default 'Sandbox folder (the ONLY folder the agent may edit)' "$($fastest.Letter):\$SLUG-sandbox" }
+if (-not $SandboxPath) { $SandboxPath = Read-Default 'Workspace folder (the agent starts and normally works here)' "$($fastest.Letter):\$SLUG-sandbox" }
 
 if (-not $ModelStorePath) {
     if ($existingStore) {
@@ -350,15 +350,15 @@ if (-not $ModelStorePath) {
         $ModelStorePath = Read-Default 'Model store (needs 10-25 GB)' "$($fastest.Letter):\$SLUG\models"
     }
 }
-$SandboxPath = Resolve-CsPath -Path $SandboxPath -Label 'Sandbox path'
+$SandboxPath = Resolve-CsPath -Path $SandboxPath -Label 'Workspace path'
 $ModelStorePath = Resolve-CsPath -Path $ModelStorePath -Label 'Model store path'
 if (Test-CsPathOverlap -Left $SandboxPath -Right $ModelStorePath) {
-    throw 'Sandbox and model store paths must be separate and cannot contain one another.'
+    throw 'Workspace and model store paths must be separate and cannot contain one another.'
 }
 $cfgDirPreview = Join-Path $env:USERPROFILE ".config\$SLUG"
 if ((Test-CsPathOverlap -Left $SandboxPath -Right $cfgDirPreview) -or
     (Test-CsPathOverlap -Left $ModelStorePath -Right $cfgDirPreview)) {
-    throw 'Sandbox and model store paths cannot overlap the Cyber-Scopolamine config directory.'
+    throw 'Workspace and model store paths cannot overlap the Cyber-Scopolamine config directory.'
 }
 $existingConfig = Read-CsJsonFile -Path (Join-Path $cfgDirPreview 'config.json')
 $sandboxWasNonEmpty = (Test-Path -LiteralPath $SandboxPath -PathType Container) -and
@@ -366,7 +366,7 @@ $sandboxWasNonEmpty = (Test-Path -LiteralPath $SandboxPath -PathType Container) 
 if ($sandboxWasNonEmpty -and
     -not $UseExistingSandbox -and
     -not ($existingConfig -and ([string]$existingConfig.sandbox).Equals($SandboxPath, [StringComparison]::OrdinalIgnoreCase))) {
-    throw "Sandbox is not empty: $SandboxPath. Re-run with -UseExistingSandbox to use it without changing existing project files."
+    throw "Workspace is not empty: $SandboxPath. Re-run with -UseExistingSandbox to use it without changing existing project files."
 }
 $OllamaHost = "127.0.0.1:$OllamaPort"
 $OllamaEndpoint = "http://$OllamaHost"
@@ -375,7 +375,7 @@ Write-Step 'Ready'
 Write-Host "    $($C.Muted)Model      $($C.Reset) $Model"
 Write-Host "    $($C.Muted)Local build$($C.Reset) $AgentModelRef  ($NumCtx ctx)"
 Write-Host "    $($C.Muted)Backend    $($C.Reset) $($gpu.Backend)  ($($gpu.Vendor))"
-Write-Host "    $($C.Muted)Sandbox    $($C.Reset) $SandboxPath"
+Write-Host "    $($C.Muted)Workspace  $($C.Reset) $SandboxPath"
 Write-Host "    $($C.Muted)Model store$($C.Reset) $ModelStorePath"
 Write-Host "    $($C.Muted)Endpoint   $($C.Reset) $OllamaEndpoint  (dedicated)"
 Write-Host "    $($C.Muted)aider      $($C.Reset) $AIDER_VERSION (pinned)"
@@ -427,7 +427,6 @@ if (Test-Path $privateAider) {
 if ($havePrivate) {
     Write-Ok "private aider $AIDER_VERSION already present"
 } else {
-    if ($aiderVer) { Write-Info "You have aider $aiderVer installed - leaving it untouched." }
     Write-Info "Installing a private aider $AIDER_VERSION into $venvDir ..."
     & $uvExe venv $venvDir 2>&1 | Out-Null
     if ($LASTEXITCODE -ne 0) { throw "uv could not create the private environment (exit code $LASTEXITCODE)." }
@@ -550,7 +549,7 @@ if ($patchExe) {
     Write-Warn2 'Everything else works; you just get the stock aider spinner.'
 }
 
-Write-Step 'Building the sandbox'
+Write-Step 'Preparing the workspace'
 $gitIgnore = @'
 .aider-history-archive/
 .aider.chat.history.md
@@ -561,11 +560,11 @@ $gitIgnore = @'
 $noBom = New-Object System.Text.UTF8Encoding($false)
 if ($gitExe -and -not (Test-Path (Join-Path $SandboxPath '.git'))) {
     if ($sandboxWasNonEmpty) {
-        Write-Warn2 'existing nonempty sandbox is not a git repository - leaving it unchanged'
+        Write-Warn2 'existing nonempty workspace is not a git repository - leaving it unchanged'
     } else {
         & $gitExe -C $SandboxPath init -b main *>&1 | Out-Null
-        if ($LASTEXITCODE -ne 0) { throw "Could not initialise the sandbox git repository (exit code $LASTEXITCODE)." }
-        Write-Ok 'sandbox initialised as a git repo'
+        if ($LASTEXITCODE -ne 0) { throw "Could not initialise the workspace git repository (exit code $LASTEXITCODE)." }
+        Write-Ok 'workspace initialised as a git repo'
     }
 }
 if (Test-Path -LiteralPath (Join-Path $SandboxPath '.git')) {
@@ -582,7 +581,7 @@ if (Test-Path -LiteralPath (Join-Path $SandboxPath '.git')) {
         [IO.File]::AppendAllText($excludePath, $excludeText, $noBom)
     }
 }
-Write-Ok "sandbox -> $SandboxPath"
+Write-Ok "workspace -> $SandboxPath"
 
 if (-not $SkipModelPull) {
     Write-Step "Downloading the model ($Model)"
@@ -652,7 +651,7 @@ try {
         $lnk.Arguments  = "-NoLogo -NoExit -NoProfile -ExecutionPolicy Bypass -File `"$launcher`""
     }
     $lnk.WorkingDirectory = $SandboxPath
-    $lnk.Description      = "$APP_NAME - local AI coding agent, confined to $SandboxPath"
+    $lnk.Description      = "$APP_NAME - local AI coding agent, starting in $SandboxPath"
     if (Test-Path $iconDst) { $lnk.IconLocation = "$iconDst,0" }
     $lnk.Save()
     Write-Ok "created '$lnkPath'"
@@ -667,7 +666,7 @@ Write-Host ''
 Write-Host "  $($C.Violet)Start$($C.Reset)         double-click $($C.Bold)$APP_NAME$($C.Reset) on your Desktop"
 Write-Host "  $($C.Violet)Or$($C.Reset)            run $($C.Cyan)cyber-scopolamine$($C.Reset) in a $($C.Bold)new$($C.Reset) terminal"
 Write-Host "                $($C.Muted)(terminals already open won't have it on PATH yet)$($C.Reset)"
-Write-Host "  $($C.Violet)Sandbox$($C.Reset)       $SandboxPath $($C.Muted)(the only folder it can edit)$($C.Reset)"
+Write-Host "  $($C.Violet)Workspace$($C.Reset)     $SandboxPath $($C.Muted)(default working folder; not OS isolation)$($C.Reset)"
 Write-Host "  $($C.Violet)Model$($C.Reset)         $AgentModelRef $($C.Muted)($NumCtx ctx, $($gpu.Backend), fully offline)$($C.Reset)"
 Write-Host "  $($C.Violet)Old chats$($C.Reset)     $($C.Cyan)cyber-scopolamine-history$($C.Reset) list | view <n> | load <n>"
 Write-Host "  $($C.Violet)Status$($C.Reset)        $($C.Cyan)scop$($C.Reset)  (alias for cs-status)"

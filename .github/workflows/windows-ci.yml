@@ -1,0 +1,111 @@
+name: Windows CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  parse:
+    name: Parse PowerShell scripts
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Parse with Windows PowerShell 5.1
+        shell: powershell
+        run: |
+          $PSVersionTable | Format-List | Out-String | Write-Host
+          $failures = [System.Collections.Generic.List[string]]::new()
+          Get-ChildItem -Path . -Recurse -File -Filter '*.ps1' | ForEach-Object {
+            $tokens = $null
+            $errors = $null
+            [System.Management.Automation.Language.Parser]::ParseFile(
+              $_.FullName,
+              [ref]$tokens,
+              [ref]$errors
+            ) | Out-Null
+
+            foreach ($parseError in $errors) {
+              $relativePath = $_.FullName.Substring($PWD.Path.Length + 1)
+              $failures.Add(
+                "${relativePath}:$($parseError.Extent.StartLineNumber):$($parseError.Extent.StartColumnNumber): $($parseError.Message)"
+              )
+            }
+          }
+
+          if ($failures.Count -gt 0) {
+            $failures | ForEach-Object { Write-Error $_ }
+            throw "$($failures.Count) PowerShell parse error(s) found."
+          }
+
+      - name: Parse with PowerShell 7
+        shell: pwsh
+        run: |
+          $PSVersionTable | Format-List | Out-String | Write-Host
+          $failures = [System.Collections.Generic.List[string]]::new()
+          Get-ChildItem -Path . -Recurse -File -Filter '*.ps1' | ForEach-Object {
+            $tokens = $null
+            $errors = $null
+            [System.Management.Automation.Language.Parser]::ParseFile(
+              $_.FullName,
+              [ref]$tokens,
+              [ref]$errors
+            ) | Out-Null
+
+            foreach ($parseError in $errors) {
+              $relativePath = $_.FullName.Substring($PWD.Path.Length + 1)
+              $failures.Add(
+                "${relativePath}:$($parseError.Extent.StartLineNumber):$($parseError.Extent.StartColumnNumber): $($parseError.Message)"
+              )
+            }
+          }
+
+          if ($failures.Count -gt 0) {
+            $failures | ForEach-Object { Write-Error $_ }
+            throw "$($failures.Count) PowerShell parse error(s) found."
+          }
+
+  quality:
+    name: Static analysis and tests
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install test tools
+        shell: pwsh
+        run: |
+          Set-PSRepository -Name PSGallery -InstallationPolicy Trusted
+          Install-Module PSScriptAnalyzer -RequiredVersion 1.24.0 -Scope CurrentUser -Force
+          Install-Module Pester -RequiredVersion 5.7.1 -Scope CurrentUser -Force -SkipPublisherCheck
+
+      - name: Run PSScriptAnalyzer
+        shell: pwsh
+        run: |
+          $findings = Invoke-ScriptAnalyzer -Path . -Recurse -Severity Error
+          if ($findings) {
+            $findings | Format-Table RuleName, Severity, ScriptName, Line, Message -AutoSize | Out-String | Write-Host
+            throw "$($findings.Count) PSScriptAnalyzer error(s) found."
+          }
+
+      - name: Run Pester tests when present
+        shell: pwsh
+        run: |
+          $tests = @(Get-ChildItem -Path . -Recurse -File -Filter '*.Tests.ps1')
+          if ($tests.Count -eq 0) {
+            Write-Host 'No Pester tests are present yet.'
+            return
+          }
+
+          $configuration = New-PesterConfiguration
+          $configuration.Run.Path = $tests.FullName
+          $configuration.Run.Exit = $true
+          $configuration.Output.Verbosity = 'Detailed'
+          $configuration.TestResult.Enabled = $true
+          $configuration.TestResult.OutputPath = 'TestResults.xml'
+          $configuration.TestResult.OutputFormat = 'NUnitXml'
+          Invoke-Pester -Configuration $configuration

@@ -12,7 +12,7 @@ $Hist    = Join-Path $Sandbox '.aider.chat.history.md'
 $RestoreMarker = Join-Path $Archive '.restore-pending'
 
 if (-not (Test-Path $Sandbox)) {
-    Write-Host "Sandbox $Sandbox is missing - creating it." -ForegroundColor Yellow
+    Write-Host "Workspace $Sandbox is missing - creating it." -ForegroundColor Yellow
     New-Item -ItemType Directory -Force -Path $Sandbox | Out-Null
 }
 

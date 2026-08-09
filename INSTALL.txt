@@ -11,8 +11,8 @@ unplugged, and nothing you type ever leaves your machine.
 
 It comes in two parts:
 
-  cyber-scopolamine        an AI that edits code in a sandbox folder
-  cyber-scopolamine-chat   a plain chatbot, no file access at all
+  cyber-scopolamine        an AI that edits code from a workspace folder
+  cyber-scopolamine-chat   a plain chatbot with no project files attached
 
 
 ===============================================================================
@@ -66,6 +66,11 @@ INSTALLING
       Desktop. Double-click it.
 
 The first launch plays a short intro explaining what this is. It plays once.
+Press any key to skip the animation. To replay it without animation, run:
+
+    cyber-scopolamine-intro -ReducedMotion
+
+Set CS_REDUCED_MOTION=1 before launch to disable intro animation by default.
 
 
 ===============================================================================
@@ -85,7 +90,7 @@ To just have a conversation, open a terminal and run:
 Other commands you can run from any terminal:
 
     cyber-scopolamine             start the coding assistant
-    cyber-scopolamine-chat        plain conversation, no file access
+    cyber-scopolamine-chat        plain conversation, no project files attached
     cyber-scopolamine-history     browse past conversations
     cyber-scopolamine-intro       replay the intro
     cyber-scopolamine-uninstall   remove it
@@ -101,14 +106,18 @@ Inside the coding assistant:
 
 
 ===============================================================================
-THE SANDBOX
+THE WORKSPACE
 ===============================================================================
 
-The assistant works inside one folder, chosen during install (by default
+The assistant starts in one folder, chosen during install (by default
 C:\cyber-scopolamine-sandbox). Put a project in there, or let it create files.
 
-This keeps a small AI from wandering across your whole disk on a vague
-instruction. It is a guardrail, not a locked cage.
+This is a working-directory guardrail, not Windows security isolation. Commands
+and files you explicitly point outside the workspace still run with your normal
+user permissions.
+
+In chat mode, the model receives no file context. The /save command is the one
+exception: it writes a transcript to the path you choose.
 
 Nothing is committed to git automatically. Read what it changed before you
 keep it. These models are small and will sometimes be confidently wrong.
@@ -124,8 +133,8 @@ It suddenly got about 5x slower
     them out automatically.
 
 The first message takes ~10 seconds
-    Normal. The model is loading into your graphics card. Later messages are
-    fast.
+    Normal. The model is loading on your computer, usually into graphics-card
+    memory. Later messages are fast.
 
 It says a model was not found
     Run the installer again. It will rebuild it without re-downloading.
@@ -143,6 +152,6 @@ Double-click "Uninstall Cyber-Scopolamine.bat" in this same folder.
 
 It removes the program, its settings and the Desktop icon.
 
-It does NOT delete any AI models, and it does NOT delete your sandbox folder
+It does NOT delete any AI models, and it does NOT delete your workspace folder
 or anything you made in it. It will tell you where those are and how to
 remove them yourself if you want the disk space back.

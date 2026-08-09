@@ -1,4 +1,4 @@
-﻿param([switch]$Fast)
+param([switch]$Fast, [switch]$ReducedMotion)
 
 $ErrorActionPreference = 'Stop'
 
@@ -12,4 +12,4 @@ foreach ($f in @('banner.ps1','intro.ps1')) {
     . $p
 }
 
-Show-CsIntro -Fast:$Fast
+Show-CsIntro -Fast:$Fast -ReducedMotion:$ReducedMotion

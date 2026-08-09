@@ -1,0 +1,86 @@
+name: Bug report
+description: Report a reproducible install, launch, model, or command problem.
+title: "[Bug]: "
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting a problem. Remove credentials, personal data, and unrelated project files from logs. For security issues, use the private process in SECURITY.md.
+  - type: textarea
+    id: summary
+    attributes:
+      label: What happened?
+      description: Describe the failure and what you expected instead.
+      placeholder: The installer reached the model setup step, then...
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Steps to reproduce
+      description: Include the exact command or installer choice that triggers the problem.
+      placeholder: |
+        1. Run ...
+        2. Choose ...
+        3. Observe ...
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Cyber-Scopolamine version
+      description: Provide a release version or commit if known.
+      placeholder: 1.0.0 or a58711d
+    validations:
+      required: true
+  - type: input
+    id: windows
+    attributes:
+      label: Windows and PowerShell versions
+      placeholder: Windows 11 24H2; PowerShell 7.5.2
+    validations:
+      required: true
+  - type: input
+    id: hardware
+    attributes:
+      label: GPU and VRAM
+      placeholder: AMD Radeon RX 5700 XT; 8 GB
+    validations:
+      required: true
+  - type: input
+    id: local_stack
+    attributes:
+      label: Ollama, aider, and model versions
+      placeholder: Ollama 0.32.6; aider 0.86.2; cyscop-7b
+  - type: dropdown
+    id: lifecycle
+    attributes:
+      label: Installation state
+      options:
+        - Clean install
+        - Reinstall
+        - Upgrade or repair
+        - Already installed / normal use
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant output
+      description: Paste the smallest useful, sanitized log or error message.
+      render: shell
+  - type: textarea
+    id: context
+    attributes:
+      label: Additional context
+      description: Include model-store location, drive type, or other details that may matter.
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Checklist
+      options:
+        - label: I removed credentials, personal data, and unrelated source code from this report.
+          required: true
+        - label: This is not a security vulnerability.
+          required: true

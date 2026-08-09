@@ -1,7 +1,8 @@
-$here = Split-Path -Parent $MyInvocation.MyCommand.Path
-. (Join-Path (Split-Path -Parent $here) 'bin\cyber-scopolamine-common.ps1')
-
 Describe 'Cyber-Scopolamine inert configuration' {
+    BeforeEach {
+        . (Join-Path (Split-Path -Parent $PSScriptRoot) 'bin\cyber-scopolamine-common.ps1')
+    }
+
     It 'round-trips paths with spaces, apostrophes, and Unicode as JSON data' {
         $path = Join-Path $TestDrive 'config.json'
         $value = [ordered]@{
@@ -12,8 +13,8 @@ Describe 'Cyber-Scopolamine inert configuration' {
         }
         Write-CsJsonFile -Path $path -Value $value
         $loaded = Read-CsJsonFile -Path $path
-        $loaded.sandbox | Should Be $value.sandbox
-        $loaded.modelStore | Should Be $value.modelStore
+        if ($loaded.sandbox -ne $value.sandbox) { throw 'Sandbox path did not round-trip through JSON.' }
+        if ($loaded.modelStore -ne $value.modelStore) { throw 'Model-store path did not round-trip through JSON.' }
     }
 
     It 'rejects an unsupported config schema' {
@@ -21,18 +22,22 @@ Describe 'Cyber-Scopolamine inert configuration' {
         Write-CsJsonFile -Path $path -Value @{ schemaVersion = 99 }
         $threw = $false
         try { Import-CsConfig -Path $path | Out-Null } catch { $threw = $true }
-        $threw | Should Be $true
+        if (-not $threw) { throw 'Unsupported config schema was accepted.' }
     }
 
     It 'does not execute PowerShell text stored in JSON values' {
         $path = Join-Path $TestDrive 'inert.json'
         $payload = "'; throw 'executed'; '"
         Write-CsJsonFile -Path $path -Value @{ schemaVersion = 1; value = $payload }
-        (Read-CsJsonFile -Path $path).value | Should Be $payload
+        if ((Read-CsJsonFile -Path $path).value -ne $payload) { throw 'JSON payload changed or executed.' }
     }
 }
 
 Describe 'Cyber-Scopolamine Ollama ownership guard' {
+    BeforeEach {
+        . (Join-Path (Split-Path -Parent $PSScriptRoot) 'bin\cyber-scopolamine-common.ps1')
+    }
+
     It 'rejects a live PID when the executable does not match' {
         $path = Join-Path $TestDrive 'process.json'
         Write-CsJsonFile -Path $path -Value @{
@@ -40,7 +45,8 @@ Describe 'Cyber-Scopolamine Ollama ownership guard' {
             pid = $PID
             startedAtUtc = (Get-Process -Id $PID).StartTime.ToUniversalTime().ToString('o')
         }
-        Get-CsOwnedOllamaProcess -ProcessStatePath $path -ExpectedExe 'C:\definitely-not-ollama.exe' | Should BeNullOrEmpty
+        $owned = Get-CsOwnedOllamaProcess -ProcessStatePath $path -ExpectedExe 'C:\definitely-not-ollama.exe'
+        if ($null -ne $owned) { throw 'A process with the wrong executable was accepted as owned.' }
     }
 
     It 'refuses an occupied endpoint when no owned process validates' {
@@ -48,6 +54,6 @@ Describe 'Cyber-Scopolamine Ollama ownership guard' {
         Mock Get-CsOwnedOllamaProcess { $null }
         $threw = $false
         try { Assert-CsDedicatedEndpointAvailable -Endpoint 'http://127.0.0.1:11435' -ExpectedExe 'C:\ollama.exe' } catch { $threw = $true }
-        $threw | Should Be $true
+        if (-not $threw) { throw 'An unowned occupied endpoint was accepted.' }
     }
 }

@@ -38,7 +38,7 @@ if ($state -and $state.updater -and $state.updater.enabled) {
 }
 Write-Host ''
 Write-Host '  Will preserve:' -ForegroundColor Green
-if ($sandbox) { Write-Host "    sandbox: $sandbox" }
+if ($sandbox) { Write-Host "    workspace: $sandbox" }
 if ($store) { Write-Host "    model store: $store" }
 Write-Host '    Ollama and models'
 Write-Host ''
@@ -78,6 +78,6 @@ if (Test-Path -LiteralPath $cfgDir) { Remove-Item -LiteralPath $cfgDir -Recurse 
 
 Write-Host ''
 Write-Host "  Removed $($cmds.Count) command file(s), configuration, private aider, and shortcut." -ForegroundColor Green
-if ($sandbox -and (Test-Path -LiteralPath $sandbox)) { Write-Host "  Preserved sandbox: $sandbox" }
+if ($sandbox -and (Test-Path -LiteralPath $sandbox)) { Write-Host "  Preserved workspace: $sandbox" }
 if ($model) { Write-Host "  Preserved model: $model" }
 Write-Host ''

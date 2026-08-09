@@ -17,7 +17,8 @@ C17H21NO4  //  DEVIL'S BREATH FOR YOUR CODEBASE  //  IT CANNOT REFUSE
 **An RTCO Labs project.**
 
 A local AI coding agent for Windows. It runs an *abliterated* code model —
-refusal behaviour removed — **entirely on your own GPU**. No API keys, no
+refusal behaviour removed — **entirely on your own computer**, using your GPU
+when one is available and falling back to CPU when needed. No API keys, no
 account, no cloud, no per-token cost, and it keeps working with the network
 unplugged.
 
@@ -36,15 +37,15 @@ text script; you can read every line of `install.ps1` first.
 `INSTALL.txt` in the same folder covers all of this in plain language, plus
 first steps and troubleshooting.
 
-> **This repository is private**, so there is no `irm … | iex` one-liner and no
-> public download link. `install.ps1` must be run from an extracted copy of the
-> folder — it needs the `config\`, `bin\` and `patches\` directories sitting
-> next to it. Run on its own, it stops and says so rather than failing with a
-> 404.
+> `install.ps1` must be run from a complete extracted or cloned repository — it
+> needs the `config\`, `bin\` and `patches\` directories sitting next to it.
+> Run on its own, it stops with instructions instead of failing halfway through.
 
 When it finishes, double-click **Cyber-Scopolamine** on your Desktop. The first
 launch plays a short intro explaining what this is; it plays once, and
-`cyber-scopolamine-intro` replays it.
+`cyber-scopolamine-intro` replays it. Press any key to skip the animation, or
+use `cyber-scopolamine-intro -ReducedMotion` to show it instantly. Set
+`CS_REDUCED_MOTION=1` before launch to disable intro animation by default.
 
 ---
 
@@ -55,9 +56,9 @@ Two programs, and knowing which is which saves a lot of confusion:
 | | **aider** | **Ollama** |
 |---|---|---|
 | Role | The CLI you talk to | The engine that runs the model |
-| Does | Reads your code, decides which files matter, writes the prompt, applies edits to real files, handles git | Loads model weights onto your GPU and generates text |
+| Does | Reads your code, decides which files matter, writes the prompt, applies edits to real files, handles git | Loads model weights on your computer and generates text |
 | Knows about | Your code | Nothing about your code |
-| Runs on | CPU, negligible resources | **Your GPU** |
+| Runs on | CPU, negligible resources | **Your GPU when possible; CPU/RAM fallback otherwise** |
 
 **aider is the driver, Ollama is the engine.** aider has no model of its own —
 it sends prompts to Ollama and applies what comes back. If Ollama isn't
@@ -66,12 +67,12 @@ running, aider has nothing to talk to. The launcher starts it for you.
 ## Requirements
 
 - Windows 10 or 11
-- A GPU with **4 GB VRAM or more** (NVIDIA, AMD, or Intel). Less works, on CPU,
-  slowly.
+- Recommended: a GPU with **4 GB VRAM or more** (NVIDIA, AMD, or Intel).
+  Systems with less VRAM can fall back to CPU, slowly.
 - ~30 GB free disk
 - **No administrator rights.** Everything installs per-user.
 
-Optional but recommended: **Git for Windows** (the sandbox becomes a real repo,
+Optional but recommended: **Git for Windows** (the workspace becomes a real repo,
 and its bundled `patch.exe` enables the themed spinner) and **PowerShell 7**
 (renders the theme properly).
 
@@ -81,21 +82,22 @@ and its bundled `patch.exe` enables the themed spinner) and **PowerShell 7**
 |---|---|
 | Ollama (model engine) | `%LOCALAPPDATA%\Programs\Ollama` |
 | uv (Python tool manager) | `~\.local\bin` |
-| aider **0.86.2**, pinned | `~\.local\bin\aider.exe` |
+| aider **0.86.2**, pinned | `~\.config\cyber-scopolamine\aider-env\Scripts\aider.exe` |
 | The model (several GB) | your fastest drive |
 | Customizations | `~\.config\cyber-scopolamine` |
 | `cyber-scopolamine*` commands | `~\.local\bin` (added to PATH) |
-| Sandbox workspace | your fastest drive |
+| Default workspace | your fastest drive |
 | Desktop shortcut | your Desktop |
 
 The installer scans first and reports what you already have, so re-running it is
 safe — it skips anything already present.
 
-## The sandbox
+## The workspace guardrail
 
-The agent is pointed at **one folder** and works only there. Put a project in
-it, or let the agent create files. It's a guardrail, not a prison — it stops a
-small local model from wandering across your disk on a vague instruction.
+The agent starts in **one workspace folder**. Put a project in it, or let the
+agent create files there. This is a working-directory guardrail, not Windows
+security isolation: commands and files you explicitly point outside the
+workspace still run with your normal user permissions.
 
 **Auto-commit is deliberately off.** These models are far weaker than Claude or
 GPT, so you review their edits before they become git history. Run `git diff`
@@ -105,19 +107,23 @@ and commit yourself.
 
 The installer reads your VRAM and picks a model that **actually fits**:
 
-| VRAM | Model | Context |
+| Reported VRAM | Model | Context |
 |---|---|---|
-| 20 GB+ | `qwen2.5-coder-abliterate:14b` | 32K |
-| 10–20 GB | `qwen2.5-coder-abliterate:7b` | 32K |
-| 7–10 GB | `qwen2.5-coder-abliterate:7b` | 16K |
-| 5–7 GB | `qwen2.5-coder-abliterate:3b` | 16K |
-| under 5 GB | `qwen2.5-coder-abliterate:3b` | 8K (CPU, slow) |
+| 20.2 GB+ | `qwen2.5-coder-abliterate:14b` | 32K |
+| 10.2–20.1 GB | `qwen2.5-coder-abliterate:7b` | 32K |
+| 7.2–10.1 GB | `qwen2.5-coder-abliterate:7b` | 16K |
+| 4.7–7.1 GB | `qwen2.5-coder-abliterate:3b` | 16K |
+| 3.2–4.6 GB | `qwen2.5-coder-abliterate:3b` | 8K |
+| under 3.2 GB | `qwen2.5-coder-abliterate:3b` | 8K (CPU fallback, slow) |
+
+The thresholds include the installer's 1.2 GB reserve for Windows and display
+use, which is why they are slightly above round VRAM sizes.
 
 This matters more than it sounds. **A model larger than your VRAM does not
 error** — Ollama silently moves the overflow into system RAM and generation gets
 roughly 5× slower. It just feels broken. So the sizing errs small.
 
-Both the model store and the sandbox go on your **fastest drive** by default.
+Both the model store and the workspace go on your **fastest drive** by default.
 Disk class dominates start-up time: the same 7b model loads in about **9
 seconds from an NVMe SSD versus 57 seconds from a spinning HDD**. The installer
 ranks NVMe above SATA SSD above HDD and ignores a small free-space advantage on
@@ -134,7 +140,7 @@ it's sized to your card.
 
 ## Using it
 
-Double-click the icon. You land in the sandbox with the agent running.
+Double-click the icon. You land in the configured workspace with the agent running.
 
 | Command | What |
 |---|---|
@@ -143,7 +149,7 @@ Double-click the icon. You land in the sandbox with the agent running.
 | `cyber-scopolamine-history list` | List archived conversations |
 | `cyber-scopolamine-history view 1` | Read one |
 | `cyber-scopolamine-history load 1` | Restore one as the active chat |
-| `scop` | Status: GPU, VRAM in use, loaded model, sandbox |
+| `scop` | Status: GPU, VRAM in use, loaded model, workspace |
 | `cyber-scopolamine-intro` | Replay the intro sequence |
 | `cyber-scopolamine-patch` | Re-apply the themed aider patches |
 | `cyber-scopolamine-noupdate` | Explicitly disable Ollama's auto-updater |
@@ -165,9 +171,10 @@ cyber-scopolamine-chat
 ```
 
 That's a plain conversation with the same local model — streamed, with memory
-of the conversation, and no repo attached at all. It cannot read or write
-files, so it can't touch anything. Commands inside it: `/exit`, `/clear`,
-`/model <name>`, `/save <file>`.
+of the conversation, and no repo attached at all. The model receives no file
+context. The only file-writing command is `/save <file>`, which exports the
+current transcript to the path you choose. Other commands: `/exit`, `/clear`,
+and `/model <name>`.
 
 Inside the editor you can also switch modes without leaving:
 
@@ -189,12 +196,13 @@ between sessions. `cyber-scopolamine-history` brings one back.
 
 - **Launch banner** and a themed prompt with git branch/dirty state, running
   jobs and an exit-code marker
-- **Startup readout** — model, honest scope guidance, and a live tokens/sec
-  measurement, with a spinner while the model loads into VRAM
+- **Startup readout** — model, honest scope guidance, and a tokens/sec
+  measurement cached for seven days. Use `--cs-benchmark` to refresh it,
+  `--cs-no-benchmark` to skip once, or set `CS_SKIP_BENCHMARK=1` to opt out
 - **Themed waiting animation** — aider's "Waiting for `<model>`" replaced with
   76 rotating glitched phrases
 - **Fixed `/model` picker** — stock aider Tab-completes ~3000 *cloud* model
-  names from litellm, useless offline. Now it offers only your local models
+  names from litellm, useless offline. Now it offers the configured local alias
 - **Chat-history archiving** — see above
 - **Orphan reaper** — see below
 
@@ -241,10 +249,11 @@ that exact release.
 
 ### Ollama updated itself and broke
 
-Run `cyber-scopolamine-noupdate`. Ollama has no supported setting for this, so
-the tool renames the tray app (which *is* the updater) and write-protects its
-update staging folder. `ollama serve` runs the API fine without the tray icon.
-Re-run after any manual Ollama install, which restores it.
+If you deliberately need to pin the installed Ollama version, run
+`cyber-scopolamine-noupdate`. The tool records the tray-app and update-folder
+state before changing it. Undo it with `cyber-scopolamine-noupdate -Undo`;
+uninstall also restores changes owned by this project. Auto-update is left
+unchanged during a normal install.
 
 ## What it's good at, and what it isn't
 
@@ -269,7 +278,7 @@ If you already use Ollama or aider, this installs **alongside** them:
   nothing is downloaded twice and your existing models keep working. The agent
   uses a dedicated localhost endpoint (port `11435` by default) and records the
   exact process it starts; it never stops Ollama processes merely by name.
-- **aider is installed into a private environment** of its own
+- **aider is installed into a dedicated environment** of its own
   (`~\.config\cyber-scopolamine\aider-env`). Your own aider is never touched,
   downgraded, or patched. That matters because this build is pinned to one
   exact release and the themed patches rewrite aider's package internals —
@@ -284,13 +293,13 @@ Double-click **`Uninstall Cyber-Scopolamine.bat`**, or run:
 cyber-scopolamine-uninstall          # add -DryRun to preview
 ```
 
-It removes the commands, the config folder, the private aider environment and
+It removes the commands, the config folder, the dedicated aider environment and
 the desktop shortcut. If you explicitly disabled Ollama auto-update through the
 installer or helper command, uninstall restores the recorded tray-app and ACL
 state before removing its install manifest.
 
 **It never deletes models or data.** Not the model store, not any model —
-including ones it built — and not your sandbox, which holds your work. Those
+including ones it built — and not your workspace, which holds your work. Those
 are listed at the end with the exact command to remove them yourself if you
 want to. Reinstalling later reuses the models rather than re-downloading them.
 
