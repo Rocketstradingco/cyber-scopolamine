@@ -62,9 +62,6 @@ function global:prompt {
 
 function global:cs-status {
     $c = $global:CsColor
-    $envFile = Join-Path $env:USERPROFILE '.config\cyber-scopolamine\cs-env.ps1'
-    if (Test-Path $envFile) { . $envFile }
-
     $os = Get-CimInstance Win32_OperatingSystem
 
     Write-Host ''
@@ -85,17 +82,15 @@ function global:cs-status {
         $exe = if ($global:CS_OLLAMA_EXE) { $global:CS_OLLAMA_EXE } else { Join-Path $env:LOCALAPPDATA 'Programs\Ollama\ollama.exe' }
         $ps = & $exe ps 2>$null | Select-Object -Skip 1
         if ($ps) { $model = ($ps | Select-Object -First 1) -replace '\s{2,}', '  ' }
-        $ollamaUp = [bool](Get-Process 'ollama' -EA SilentlyContinue)
+        $ollamaUp = Test-CsEndpoint -Endpoint $global:CS_OLLAMA_ENDPOINT
     } catch { }
     Write-Host ("$($c.Violet){0,-12}$($c.Reset) {1}" -f 'MODEL', $model)
 
     $col = if ($ollamaUp) { $c.Lime } else { $c.Red }
     Write-Host ("$($c.Violet){0,-12}$($c.Reset) $col{1}$($c.Reset)" -f 'OLLAMA', $(if ($ollamaUp) { 'running' } else { 'stopped' }))
 
-    $orphans = @(Get-CimInstance Win32_Process -Filter "Name='llama-server.exe'" -EA SilentlyContinue |
-                 Where-Object { -not (Get-Process -Id $_.ParentProcessId -EA SilentlyContinue) })
-    if ($orphans.Count -gt 0) {
-        Write-Host ("$($c.Violet){0,-12}$($c.Reset) $($c.Red){1} orphaned runner(s) holding VRAM - relaunch to reap$($c.Reset)" -f 'WARNING', $orphans.Count)
+    if ($global:CS_OLLAMA_ENDPOINT) {
+        Write-Host ("$($c.Violet){0,-12}$($c.Reset) {1}" -f 'ENDPOINT', $global:CS_OLLAMA_ENDPOINT)
     }
 
     if ($global:CS_SANDBOX) {

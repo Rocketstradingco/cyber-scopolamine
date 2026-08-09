@@ -3,12 +3,11 @@
 $ErrorActionPreference = 'Stop'
 
 $cfg = Join-Path $env:USERPROFILE '.config\cyber-scopolamine'
-$envFile = Join-Path $cfg 'cs-env.ps1'
-if (-not (Test-Path $envFile)) {
-    Write-Host "Cyber-Scopolamine is not configured ($envFile missing). Re-run install.ps1." -ForegroundColor Red
-    return
-}
-. $envFile
+$common = Join-Path $PSScriptRoot 'cyber-scopolamine-common.ps1'
+if (-not (Test-Path -LiteralPath $common)) { throw "Runtime helper is missing: $common. Re-run install.ps1." }
+. $common
+try { Import-CsConfig | Out-Null }
+catch { Write-Host $_.Exception.Message -ForegroundColor Red; exit 2 }
 foreach ($f in @('banner.ps1','prompt.ps1')) {
     $p = Join-Path $cfg $f
     if (Test-Path $p) { . $p }
@@ -18,18 +17,11 @@ $c = if (Get-Command Get-CsPalette -ErrorAction SilentlyContinue) { Get-CsPalett
     @{ Reset=''; Bold=''; Violet=''; Cyan=''; Lime=''; White=''; Muted=''; Amber=''; Red=''; Orange='' }
 }
 if (-not $Model) { $Model = $global:CS_MODEL }
-$api = 'http://127.0.0.1:11434'
+$api = $global:CS_OLLAMA_ENDPOINT
 
 $env:OLLAMA_MODELS = $global:CS_MODEL_STORE
+$env:OLLAMA_HOST = $global:CS_OLLAMA_HOST
 if (-not $env:OLLAMA_FLASH_ATTENTION) { $env:OLLAMA_FLASH_ATTENTION = '1' }
-
-$orphans = Get-CimInstance Win32_Process -Filter "Name='llama-server.exe'" -ErrorAction SilentlyContinue |
-    Where-Object { -not (Get-Process -Id $_.ParentProcessId -ErrorAction SilentlyContinue) }
-if ($orphans) {
-    Write-Host "Reaping $(@($orphans).Count) orphaned model runner(s) holding VRAM..." -ForegroundColor Yellow
-    $orphans | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
-    Start-Sleep -Seconds 2
-}
 
 function Test-CsUp {
     try { Invoke-WebRequest "$api/api/tags" -TimeoutSec 3 -UseBasicParsing | Out-Null; return $true } catch { return $false }
@@ -40,28 +32,22 @@ function Test-CsModel {
         return [bool]($t.models | Where-Object { $_.name -eq $Model })
     } catch { return $false }
 }
-function Start-CsOllama {
-    Start-Process -FilePath $global:CS_OLLAMA_EXE -ArgumentList 'serve' -WindowStyle Hidden
-    for ($i = 0; $i -lt 30; $i++) { Start-Sleep -Seconds 1; if (Test-CsUp) { return $true } }
-    return $false
-}
-
-if (-not (Test-CsUp)) {
-    Write-Host 'Starting Ollama...' -ForegroundColor Yellow
-    if (-not (Start-CsOllama)) { Write-Host 'Ollama would not start.' -ForegroundColor Red; return }
-}
-if (-not (Test-CsModel)) {
-    Write-Host "Ollama is running against a different model store - restarting it..." -ForegroundColor Yellow
-    Get-Process 'ollama','llama-server' -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
-    Start-Sleep -Seconds 2
-    Start-CsOllama | Out-Null
+try {
+    Assert-CsDedicatedEndpointAvailable
+    if (-not (Test-CsUp)) {
+        Write-Host "Starting Cyber-Scopolamine's dedicated Ollama server at $api..." -ForegroundColor Yellow
+        Start-CsOwnedOllama | Out-Null
+    }
+} catch {
+    Write-Host $_.Exception.Message -ForegroundColor Red
+    exit 3
 }
 if (-not (Test-CsModel)) {
     Write-Host ''
     Write-Host "  Model '$Model' was not found in $($global:CS_MODEL_STORE)." -ForegroundColor Red
     Write-Host '  Re-run install.ps1 to rebuild it.'
     Write-Host ''
-    return
+    exit 4
 }
 
 if (Get-Command Show-CsBanner -ErrorAction SilentlyContinue) { Show-CsBanner }
@@ -69,7 +55,7 @@ if (Get-Command Show-CsBanner -ErrorAction SilentlyContinue) { Show-CsBanner }
 Write-Host "$($c.Muted)-- $($c.Reset)$($c.Bold)$($c.Violet)CYBER-SCOPOLAMINE$($c.Reset) $($c.Muted)chat $('-' * 44)$($c.Reset)"
 Write-Host "$($c.Violet)Model: $($c.Reset) $Model $($c.Muted)(local, no API cost)$($c.Reset)"
 Write-Host "$($c.Violet)This is$($c.Reset) a plain conversation - it has no access to your files and"
-Write-Host "        writes nothing to disk. For editing code, run 'cyber-scopolamine'."
+Write-Host "        does not read your files. It writes only when you use /save."
 Write-Host "$($c.Violet)Commands$($c.Reset) /exit  /clear  /model <name>  /save <file>"
 Write-Host "$($c.Muted)$('-' * 66)$($c.Reset)"
 Write-Host ''

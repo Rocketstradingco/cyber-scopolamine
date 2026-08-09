@@ -1,7 +1,6 @@
 ﻿$csEnv = Join-Path $env:USERPROFILE '.config\cyber-scopolamine\cs-env.ps1'
-if (Test-Path $csEnv) { . $csEnv }
-
-$env:OLLAMA_API_BASE = 'http://127.0.0.1:11434'
+$env:OLLAMA_API_BASE = $global:CS_OLLAMA_ENDPOINT
+$env:OLLAMA_HOST = $global:CS_OLLAMA_HOST
 $global:CsAiderExe = if ($global:CS_AIDER_EXE) { $global:CS_AIDER_EXE }
                      else { Join-Path $env:USERPROFILE '.local\bin\aider.exe' }
 
@@ -9,7 +8,7 @@ function global:Get-CsTokensPerSecond {
     param([string]$Model, [int]$TimeoutSec = 30)
     try {
         $body = @{ model = $Model; prompt = 'hi'; stream = $false } | ConvertTo-Json -Compress
-        $r = Invoke-RestMethod 'http://127.0.0.1:11434/api/generate' -Method Post `
+        $r = Invoke-RestMethod "$($global:CS_OLLAMA_ENDPOINT)/api/generate" -Method Post `
                 -Body $body -ContentType 'application/json' -TimeoutSec $TimeoutSec
         if ($r.eval_count -and $r.eval_duration) {
             return [math]::Round($r.eval_count / ($r.eval_duration / 1e9), 0)
@@ -37,7 +36,7 @@ function global:aider {
 
     $speed = $null; $resident = $false
     try {
-        $loaded = Invoke-RestMethod 'http://127.0.0.1:11434/api/ps' -TimeoutSec 3
+        $loaded = Invoke-RestMethod "$($global:CS_OLLAMA_ENDPOINT)/api/ps" -TimeoutSec 3
         $resident = [bool]($loaded.models | Where-Object { $_.name -eq $model })
     } catch { }
 
@@ -48,16 +47,16 @@ function global:aider {
         $speed = Get-CsTokensPerSecond -Model $model -TimeoutSec 300
     } else {
         $job = Start-ThreadJob -ScriptBlock {
-            param($m)
+            param($m, $endpoint)
             try {
                 $body = @{ model = $m; prompt = 'hi'; stream = $false } | ConvertTo-Json -Compress
-                $r = Invoke-RestMethod 'http://127.0.0.1:11434/api/generate' -Method Post `
+                $r = Invoke-RestMethod "$endpoint/api/generate" -Method Post `
                         -Body $body -ContentType 'application/json' -TimeoutSec 300
                 if ($r.eval_count -and $r.eval_duration) {
                     [math]::Round($r.eval_count / ($r.eval_duration / 1e9), 0)
                 }
             } catch { }
-        } -ArgumentList $model
+        } -ArgumentList $model,$global:CS_OLLAMA_ENDPOINT
 
         $frames = @([char]0x280B,[char]0x2819,[char]0x2839,[char]0x2838,[char]0x283C,
                     [char]0x2834,[char]0x2826,[char]0x2827,[char]0x2807,[char]0x280F)
@@ -79,5 +78,5 @@ function global:aider {
     }
     Write-Host "$($c.Muted)$('-' * 66)$($c.Reset)"
 
-    & $global:CsAiderExe @args
+    & $global:CsAiderExe --config $global:CS_AIDER_CONFIG @args
 }

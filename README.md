@@ -146,7 +146,8 @@ Double-click the icon. You land in the sandbox with the agent running.
 | `scop` | Status: GPU, VRAM in use, loaded model, sandbox |
 | `cyber-scopolamine-intro` | Replay the intro sequence |
 | `cyber-scopolamine-patch` | Re-apply the themed aider patches |
-| `cyber-scopolamine-noupdate` | Re-disable Ollama's auto-updater |
+| `cyber-scopolamine-noupdate` | Explicitly disable Ollama's auto-updater |
+| `cyber-scopolamine-noupdate -Undo` | Restore updater state changed by this project |
 
 Inside aider: `/add <file>` puts a file in context, `/model <alias>` swaps
 models, `/help` lists everything, `Ctrl-C` twice quits.
@@ -265,8 +266,9 @@ point of the name. What you do with it is on you.
 If you already use Ollama or aider, this installs **alongside** them:
 
 - **Your Ollama model store is detected and shared**, never replaced — so
-  nothing is downloaded twice and your existing models keep working. If Ollama
-  is already running against that same store, the installer leaves it alone.
+  nothing is downloaded twice and your existing models keep working. The agent
+  uses a dedicated localhost endpoint (port `11435` by default) and records the
+  exact process it starts; it never stops Ollama processes merely by name.
 - **aider is installed into a private environment** of its own
   (`~\.config\cyber-scopolamine\aider-env`). Your own aider is never touched,
   downgraded, or patched. That matters because this build is pinned to one
@@ -283,7 +285,9 @@ cyber-scopolamine-uninstall          # add -DryRun to preview
 ```
 
 It removes the commands, the config folder, the private aider environment and
-the desktop shortcut.
+the desktop shortcut. If you explicitly disabled Ollama auto-update through the
+installer or helper command, uninstall restores the recorded tray-app and ACL
+state before removing its install manifest.
 
 **It never deletes models or data.** Not the model store, not any model —
 including ones it built — and not your sandbox, which holds your work. Those

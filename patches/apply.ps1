@@ -14,9 +14,10 @@ if (-not $patchExe) {
 }
 
 $pkgRoot = $null
-$envFile = Join-Path $env:USERPROFILE '.config\cyber-scopolamine\cs-env.ps1'
-if (Test-Path $envFile) {
-    . $envFile
+$common = Join-Path $env:USERPROFILE '.local\bin\cyber-scopolamine-common.ps1'
+if (Test-Path $common) {
+    . $common
+    Import-CsConfig | Out-Null
     if ($global:CS_AIDER_EXE -and (Test-Path $global:CS_AIDER_EXE)) {
         $scripts = Split-Path -Parent $global:CS_AIDER_EXE
         $candidate = Join-Path (Split-Path -Parent $scripts) 'Lib\site-packages'
