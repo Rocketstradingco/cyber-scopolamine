@@ -361,11 +361,12 @@ if ((Test-CsPathOverlap -Left $SandboxPath -Right $cfgDirPreview) -or
     throw 'Sandbox and model store paths cannot overlap the Cyber-Scopolamine config directory.'
 }
 $existingConfig = Read-CsJsonFile -Path (Join-Path $cfgDirPreview 'config.json')
-if ((Test-Path -LiteralPath $SandboxPath -PathType Container) -and
-    @(Get-ChildItem -LiteralPath $SandboxPath -Force -ErrorAction SilentlyContinue).Count -gt 0 -and
+$sandboxWasNonEmpty = (Test-Path -LiteralPath $SandboxPath -PathType Container) -and
+    @(Get-ChildItem -LiteralPath $SandboxPath -Force -ErrorAction SilentlyContinue).Count -gt 0
+if ($sandboxWasNonEmpty -and
     -not $UseExistingSandbox -and
     -not ($existingConfig -and ([string]$existingConfig.sandbox).Equals($SandboxPath, [StringComparison]::OrdinalIgnoreCase))) {
-    throw "Sandbox is not empty: $SandboxPath. Re-run with -UseExistingSandbox to use it without replacing its .gitignore."
+    throw "Sandbox is not empty: $SandboxPath. Re-run with -UseExistingSandbox to use it without changing existing project files."
 }
 $OllamaHost = "127.0.0.1:$OllamaPort"
 $OllamaEndpoint = "http://$OllamaHost"
@@ -559,9 +560,13 @@ $gitIgnore = @'
 
 $noBom = New-Object System.Text.UTF8Encoding($false)
 if ($gitExe -and -not (Test-Path (Join-Path $SandboxPath '.git'))) {
-    & $gitExe -C $SandboxPath init -b main *>&1 | Out-Null
-    if ($LASTEXITCODE -ne 0) { throw "Could not initialise the sandbox git repository (exit code $LASTEXITCODE)." }
-    Write-Ok 'sandbox initialised as a git repo'
+    if ($sandboxWasNonEmpty) {
+        Write-Warn2 'existing nonempty sandbox is not a git repository - leaving it unchanged'
+    } else {
+        & $gitExe -C $SandboxPath init -b main *>&1 | Out-Null
+        if ($LASTEXITCODE -ne 0) { throw "Could not initialise the sandbox git repository (exit code $LASTEXITCODE)." }
+        Write-Ok 'sandbox initialised as a git repo'
+    }
 }
 if (Test-Path -LiteralPath (Join-Path $SandboxPath '.git')) {
     $excludePath = Join-Path $SandboxPath '.git\info\exclude'

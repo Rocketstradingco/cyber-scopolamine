@@ -19,6 +19,8 @@ $store = if ($config) { [string]$config.modelStore } else { $null }
 $model = if ($config) { [string]$config.model } else { $null }
 
 $cmds = @(Get-ChildItem -Path (Join-Path $binDir "$SLUG*") -File -ErrorAction SilentlyContinue)
+$scop = Join-Path $binDir 'scop.cmd'
+if (Test-Path -LiteralPath $scop) { $cmds += Get-Item -LiteralPath $scop }
 $targets = @()
 if (Test-Path -LiteralPath $cfgDir) { $targets += $cfgDir }
 if (Test-Path -LiteralPath $lnkPath) { $targets += $lnkPath }

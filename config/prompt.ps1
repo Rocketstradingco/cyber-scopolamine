@@ -61,48 +61,12 @@ function global:prompt {
 }
 
 function global:cs-status {
-    $c = $global:CsColor
-    $os = Get-CimInstance Win32_OperatingSystem
-
-    Write-Host ''
-    Write-Host "$($c.Bold)$($c.White)CYBER-SCOPOLAMINE$($c.Reset)$($c.Muted)  //  STATUS$($c.Reset)"
-
-    $gpuName = (Get-CimInstance Win32_VideoController -EA SilentlyContinue |
-                Where-Object { $_.AdapterRAM -gt 0 } | Select-Object -First 1).Name
-    if ($gpuName) { Write-Host ("$($c.Violet){0,-12}$($c.Reset) {1}" -f 'GPU', $gpuName) }
-    try {
-        $usedMB = ((Get-Counter '\GPU Adapter Memory(*)\Dedicated Usage' -EA Stop).CounterSamples |
-                   Measure-Object CookedValue -Sum).Sum / 1MB
-        Write-Host ("$($c.Violet){0,-12}$($c.Reset) {1:N0} MB in use" -f 'VRAM', $usedMB)
-    } catch { }
-
-    $model = 'not loaded'
-    $ollamaUp = $false
-    try {
-        $exe = if ($global:CS_OLLAMA_EXE) { $global:CS_OLLAMA_EXE } else { Join-Path $env:LOCALAPPDATA 'Programs\Ollama\ollama.exe' }
-        $ps = & $exe ps 2>$null | Select-Object -Skip 1
-        if ($ps) { $model = ($ps | Select-Object -First 1) -replace '\s{2,}', '  ' }
-        $ollamaUp = Test-CsEndpoint -Endpoint $global:CS_OLLAMA_ENDPOINT
-    } catch { }
-    Write-Host ("$($c.Violet){0,-12}$($c.Reset) {1}" -f 'MODEL', $model)
-
-    $col = if ($ollamaUp) { $c.Lime } else { $c.Red }
-    Write-Host ("$($c.Violet){0,-12}$($c.Reset) $col{1}$($c.Reset)" -f 'OLLAMA', $(if ($ollamaUp) { 'running' } else { 'stopped' }))
-
-    if ($global:CS_OLLAMA_ENDPOINT) {
-        Write-Host ("$($c.Violet){0,-12}$($c.Reset) {1}" -f 'ENDPOINT', $global:CS_OLLAMA_ENDPOINT)
+    $statusScript = Join-Path $env:USERPROFILE '.local\bin\cyber-scopolamine-status.ps1'
+    if (-not (Test-Path -LiteralPath $statusScript)) {
+        Write-Host "Status command is missing: $statusScript" -ForegroundColor Red
+        return
     }
-
-    if ($global:CS_SANDBOX) {
-        Write-Host ("$($c.Violet){0,-12}$($c.Reset) {1}" -f 'SANDBOX', $global:CS_SANDBOX)
-    }
-    if ($global:CS_MODEL_STORE -and (Test-Path $global:CS_MODEL_STORE)) {
-        $d = Get-PSDrive -Name ($global:CS_MODEL_STORE.Substring(0,1)) -EA SilentlyContinue
-        if ($d) { Write-Host ("$($c.Violet){0,-12}$($c.Reset) {1}  ({2:N0} GB free)" -f 'MODELS', $global:CS_MODEL_STORE, ($d.Free/1GB)) }
-    }
-    Write-Host ("$($c.Violet){0,-12}$($c.Reset) {1:N1} GB used / {2:N1} GB free" -f 'MEMORY',
-        (($os.TotalVisibleMemorySize-$os.FreePhysicalMemory)/1MB), ($os.FreePhysicalMemory/1MB))
-    Write-Host ''
+    & $statusScript
 }
 
 Set-Alias -Name scop -Value cs-status -Scope Global
