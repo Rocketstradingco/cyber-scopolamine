@@ -79,5 +79,10 @@ function global:aider {
     }
     Write-Host "$($c.Muted)$('-' * 66)$($c.Reset)"
 
-    & $global:CsAiderExe @args
+    $managedConfig = Join-Path $env:USERPROFILE '.config\cyber-scopolamine\aider.conf.yml'
+    if (Test-Path -LiteralPath $managedConfig) {
+        & $global:CsAiderExe --config $managedConfig @args
+    } else {
+        & $global:CsAiderExe @args
+    }
 }

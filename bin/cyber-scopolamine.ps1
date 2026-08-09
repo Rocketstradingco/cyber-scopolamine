@@ -10,6 +10,12 @@ if (-not (Test-Path $envFile)) {
 $Sandbox = $global:CS_SANDBOX
 $Archive = Join-Path $Sandbox '.aider-history-archive'
 $Hist    = Join-Path $Sandbox '.aider.chat.history.md'
+$RestoreMarker = Join-Path $Sandbox '.aider-history-restore.pending'
+$historyLib = Join-Path $PSScriptRoot 'cyber-scopolamine-history-lib.ps1'
+if (-not (Test-Path -LiteralPath $historyLib)) {
+    throw "History support file is missing: $historyLib"
+}
+. $historyLib
 
 if (-not (Test-Path $Sandbox)) {
     Write-Host "Sandbox $Sandbox is missing - creating it." -ForegroundColor Yellow
@@ -18,10 +24,6 @@ if (-not (Test-Path $Sandbox)) {
 
 Set-Location $Sandbox
 New-Item -ItemType Directory -Force -Path $Archive | Out-Null
-
-if ((Test-Path $Hist) -and (Get-Item $Hist).Length -gt 0) {
-    Move-Item -LiteralPath $Hist -Destination (Join-Path $Archive ((Get-Date -Format 'yyyyMMdd-HHmmss') + '.md'))
-}
 
 $env:OLLAMA_MODELS   = $global:CS_MODEL_STORE
 $env:OLLAMA_API_BASE = 'http://127.0.0.1:11434'
@@ -92,6 +94,11 @@ if ((-not (Test-Path $introMarker)) -and (Test-Path $introScript)) {
     . $introScript
     try { Show-CsIntro } catch { }
     New-Item -ItemType File -Path $introMarker -Force | Out-Null
+}
+
+$historyState = Complete-CsHistoryLaunchPreparation -HistoryPath $Hist -ArchiveDirectory $Archive -MarkerPath $RestoreMarker
+if ($historyState -eq 'restored') {
+    Write-Host 'Restoring the selected archived conversation.' -ForegroundColor Cyan
 }
 
 aider @args

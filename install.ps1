@@ -378,6 +378,8 @@ Write-Step 'Creating folders and configuration'
 $cfgDir   = Join-Path $env:USERPROFILE ".config\$SLUG"
 $binDir   = Join-Path $env:USERPROFILE '.local\bin'
 $patchDir = Join-Path $cfgDir 'patches'
+$sandboxWasNonEmpty = (Test-Path -LiteralPath $SandboxPath) -and
+    [bool](Get-ChildItem -LiteralPath $SandboxPath -Force -ErrorAction SilentlyContinue | Select-Object -First 1)
 foreach ($d in @($cfgDir,$binDir,$patchDir,$ModelStorePath,$SandboxPath,(Join-Path $SandboxPath '.aider-history-archive'))) {
     New-Item -ItemType Directory -Force -Path $d | Out-Null
 }
@@ -433,21 +435,38 @@ if ($patchExe) {
 
 Write-Step 'Building the sandbox'
 $conf = (Get-Content (Join-Path $SrcRoot 'config\aider.conf.yml.template') -Raw).Replace('{{MODEL}}', "$AgentModel`:latest")
-$gitIgnore = @'
+$managedAiderConfig = Join-Path $cfgDir 'aider.conf.yml'
+$gitIgnoreBlock = @'
+# Cyber-Scopolamine managed ignores
 .aider-history-archive/
+.aider-history-restore.pending
 .aider.chat.history.md
 .aider.input.history
 .aider.tags.cache.v*/
 '@
 
 $noBom = New-Object System.Text.UTF8Encoding($false)
-[System.IO.File]::WriteAllText((Join-Path $SandboxPath '.aider.conf.yml'), $conf, $noBom)
-[System.IO.File]::WriteAllText((Join-Path $SandboxPath '.gitignore'), $gitIgnore, $noBom)
-if ($gitExe -and -not (Test-Path (Join-Path $SandboxPath '.git'))) {
-    & git -C $SandboxPath init -b main *>&1 | Out-Null
-    Write-Ok 'sandbox initialised as a git repo'
+[System.IO.File]::WriteAllText($managedAiderConfig, $conf, $noBom)
+$gitIgnorePath = Join-Path $SandboxPath '.gitignore'
+if (-not (Test-Path -LiteralPath $gitIgnorePath)) {
+    [System.IO.File]::WriteAllText($gitIgnorePath, $gitIgnoreBlock, $noBom)
+} else {
+    $existingIgnore = Get-Content -LiteralPath $gitIgnorePath -Raw
+    if ($existingIgnore -notmatch '(?m)^# Cyber-Scopolamine managed ignores$') {
+        $separator = if ($existingIgnore.EndsWith("`n")) { '' } else { "`r`n" }
+        [System.IO.File]::AppendAllText($gitIgnorePath, "$separator$gitIgnoreBlock", $noBom)
+    }
 }
-Write-Ok "sandbox -> $SandboxPath"
+if ($gitExe -and -not (Test-Path (Join-Path $SandboxPath '.git'))) {
+    if ($sandboxWasNonEmpty) {
+        Write-Warn2 'existing nonempty workspace is not a git repository - leaving it unchanged'
+    } else {
+        & git -C $SandboxPath init -b main *>&1 | Out-Null
+        if ($LASTEXITCODE -ne 0) { throw 'Could not initialize the workspace as a git repository.' }
+        Write-Ok 'workspace initialised as a git repo'
+    }
+}
+Write-Ok "workspace -> $SandboxPath"
 
 if (-not $SkipModelPull) {
     Write-Step "Downloading the model ($Model)"
