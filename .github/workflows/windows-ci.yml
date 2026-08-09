@@ -11,26 +11,42 @@ permissions:
 
 jobs:
   parse:
-    name: Parse with ${{ matrix.name }}
+    name: Parse PowerShell scripts
     runs-on: windows-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - name: Windows PowerShell 5.1
-            shell: powershell
-          - name: PowerShell 7
-            shell: pwsh
     steps:
       - uses: actions/checkout@v4
 
-      - name: Report PowerShell version
-        shell: ${{ matrix.shell }}
-        run: $PSVersionTable | Format-List | Out-String | Write-Host
-
-      - name: Parse PowerShell scripts
-        shell: ${{ matrix.shell }}
+      - name: Parse with Windows PowerShell 5.1
+        shell: powershell
         run: |
+          $PSVersionTable | Format-List | Out-String | Write-Host
+          $failures = [System.Collections.Generic.List[string]]::new()
+          Get-ChildItem -Path . -Recurse -File -Filter '*.ps1' | ForEach-Object {
+            $tokens = $null
+            $errors = $null
+            [System.Management.Automation.Language.Parser]::ParseFile(
+              $_.FullName,
+              [ref]$tokens,
+              [ref]$errors
+            ) | Out-Null
+
+            foreach ($parseError in $errors) {
+              $relativePath = $_.FullName.Substring($PWD.Path.Length + 1)
+              $failures.Add(
+                "${relativePath}:$($parseError.Extent.StartLineNumber):$($parseError.Extent.StartColumnNumber): $($parseError.Message)"
+              )
+            }
+          }
+
+          if ($failures.Count -gt 0) {
+            $failures | ForEach-Object { Write-Error $_ }
+            throw "$($failures.Count) PowerShell parse error(s) found."
+          }
+
+      - name: Parse with PowerShell 7
+        shell: pwsh
+        run: |
+          $PSVersionTable | Format-List | Out-String | Write-Host
           $failures = [System.Collections.Generic.List[string]]::new()
           Get-ChildItem -Path . -Recurse -File -Filter '*.ps1' | ForEach-Object {
             $tokens = $null
