@@ -58,6 +58,6 @@ switch ($Command) {
         }
         Copy-Item -LiteralPath $f.FullName -Destination $Hist
         New-Item -ItemType File -Path $RestoreMarker -Force | Out-Null
-        Write-Host "Loaded $($f.Name) - the next launch in this sandbox will restore it."
+        Write-Host "Loaded $($f.Name) - the next launch in this workspace will restore it."
     }
 }

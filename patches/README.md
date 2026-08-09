@@ -12,22 +12,22 @@ Two independent fixes bundled together since both edit installed
 2. **`/model` picker:** on this offline, no-API-key box, `/model`'s
    built-in Tab-completion was pulling from litellm's ~3000-entry cloud
    model catalog (`completions_model` returning `litellm.model_cost.keys()`)
-   instead of the 4 locally-configured Ollama aliases — so pressing Tab
+   instead of the configured Ollama alias — so pressing Tab
    either showed nothing (a separate bug: aider's completer refuses to
    complete right after a bare trailing space) or, once you typed a
    character, buried the real options among thousands of irrelevant
    cloud names. Typing a stray cloud model name and submitting it then
    fails with litellm's "LLM Provider NOT provided" error. Now `/model `
-   + Tab (even with nothing typed yet) arrow-completes through exactly
-   the local Ollama-backed aliases, and `/model` with no argument prints
+   + Tab (even with nothing typed yet) completes from the configured local
+   Ollama-backed aliases, and `/model` with no argument prints
    the same local-only table with a `*` on the active one.
 
 These patches edit the **installed** `aider-chat` package directly, not
 aider's own upstream source, so they're lost on `uv tool upgrade
 aider-chat` / reinstall. Reapply with:
 
-```
-./apply.sh
+```powershell
+cyber-scopolamine-patch
 ```
 
 ## Files
@@ -43,8 +43,8 @@ aider-chat` / reinstall. Reapply with:
 - `0003-commands-py.patch` — adds `Commands._local_model_aliases()`
   (aliases whose target starts with `ollama_chat/` or `ollama/`), used
   by both `cmd_model` (the no-argument printed table) and
-  `completions_model` (Tab-completion candidates) so only real local
-  options are ever offered — the cloud catalog is still reachable via
+  `completions_model` (Tab-completion candidates) so only configured local
+  options are offered — the cloud catalog is still reachable via
   the separate `/models <search>` command.
 - `0004-io-py.patch` — `AutoCompleter.get_completions` /
   `get_command_completions` in `aider/io.py`: previously *any* slash
@@ -55,8 +55,8 @@ aider-chat` / reinstall. Reapply with:
   multi-column completion menu — no key-binding changes needed). This is
   a general fix, so it also applies to other commands' argument
   completion, not just `/model`.
-- `apply.sh` — locates the active `aider` install via `which aider` and
-  applies all four patches with `patch -p1`.
+- `apply.ps1` — locates Cyber-Scopolamine's dedicated aider environment and
+  applies all four patches with Git for Windows' `patch.exe`.
 
 ## Verifying it applied
 
@@ -66,7 +66,6 @@ aider --version   # confirm which install you're patching
 
 Then start a chat and trigger a model response — the label should be a
 glitchy, changing colored phrase, never the model name, bar animation
-intact. Type `/model` with no argument to confirm only the 4 local
-aliases show (not sonnet/opus/haiku/etc.), then type `/model ` and press
-Tab to confirm the same 4 show up as an arrow-navigable dropdown with
-nothing typed yet.
+intact. Type `/model` with no argument to confirm only the configured `local`
+alias shows (not sonnet/opus/haiku/etc.), then type `/model ` and press Tab to
+confirm it appears in the completion dropdown with nothing typed yet.

@@ -44,15 +44,20 @@ function global:Write-CsPause {
 }
 
 function global:Show-CsIntro {
-    param([switch]$Fast)
+    param([switch]$Fast, [switch]$ReducedMotion)
 
     $c = Get-CsPalette
-    $script:CsIntroSkip = [bool]$Fast
-    $d = if ($Fast) { 0 } else { 10 }
+    $reduce = $Fast -or $ReducedMotion -or ($env:CS_REDUCED_MOTION -match '^(1|true|yes)$')
+    $script:CsIntroSkip = [bool]$reduce
+    $d = if ($reduce) { 0 } else { 10 }
     $body = $c.White
 
     try { Clear-Host } catch { }
     Show-CsBanner
+    if (-not $reduce -and (Test-CsCanReadKey)) {
+        Write-Host "  $($c.Muted)Press any key at any time to skip the animation.$($c.Reset)"
+        Write-Host ''
+    }
     Write-CsPause 500
 
     $rule = '  ' + ('-' * 66)
@@ -112,15 +117,15 @@ function global:Show-CsIntro {
     Write-CsTyped '  THREE THINGS TO KNOW' "$($c.Bold)$($c.Cyan)" $d
     Write-Host ''
     Write-CsTyped '  1.  ' $c.Violet $d -NoNewline
-    Write-CsTyped 'It runs entirely on your own GPU.' $c.Lime $d -NoNewline
-    Write-CsTyped ' No API key, no account,' $body $d
+    Write-CsTyped 'It runs entirely on your own computer.' $c.Lime $d -NoNewline
+    Write-CsTyped ' It uses your GPU when available,' $body $d
+    Write-CsTyped '      with a CPU fallback. No API key, no account,' $body $d
     Write-CsTyped '      no cloud, no bill. Unplug the network and it still works.' $body $d
     Write-CsPause 250
     Write-CsTyped '  2.  ' $c.Violet $d -NoNewline
-    Write-CsTyped 'It works inside one sandbox folder' $c.Lime $d -NoNewline
-    Write-CsTyped ' and starts there, so it' $body $d
-    Write-CsTyped '      will not scatter files across your disk. It only edits what' $body $d
-    Write-CsTyped '      you add to the chat - a guardrail, not a locked cage.' $body $d
+    Write-CsTyped 'It starts in one workspace folder.' $c.Lime $d
+    Write-CsTyped '      That is a working-directory guardrail, not Windows isolation.' $body $d
+    Write-CsTyped '      Files you explicitly add elsewhere use your normal permissions.' $body $d
     Write-CsPause 250
     Write-CsTyped '  3.  ' $c.Violet $d -NoNewline
     Write-CsTyped 'It is small, and it will be confidently wrong sometimes.' $c.Lime $d
@@ -137,7 +142,7 @@ function global:Show-CsIntro {
     Write-CsPause 400
     Write-Host "  $($c.Muted)This plays once. Replay any time with $($c.Reset)$($c.Cyan)cyber-scopolamine-intro$($c.Reset)$($c.Muted).$($c.Reset)"
     Write-Host ''
-    if (-not $Fast -and (Test-CsCanReadKey)) {
+    if (-not $reduce -and (Test-CsCanReadKey)) {
         Write-Host "  $($c.Cyan)Press any key to begin...$($c.Reset)" -NoNewline
         try {
             while ([Console]::KeyAvailable) { $null = [Console]::ReadKey($true) }

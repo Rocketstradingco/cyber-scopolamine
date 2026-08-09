@@ -1,8 +1,7 @@
-# RTCO Local Agent - aider configuration.
+# Cyber-Scopolamine - aider configuration.
 #
-# Scoped to this sandbox folder rather than your home directory on purpose, so
-# it does not hijack any other aider use on this machine. aider reads the
-# config from the current directory / git root before falling back to ~.
+# Stored in Cyber-Scopolamine's private config directory and passed explicitly
+# by its launcher, so it does not change any other aider use on this machine.
 #
 # The model below is the "-agent" variant the installer built: identical
 # weights to the stock model, rebuilt with a larger context window. Stock
@@ -14,9 +13,10 @@ show-release-notes: false
 check-update: false
 gui: false
 browser: false
+analytics: false
 
 # Each launch starts fresh; the previous conversation is archived, not
-# restored. Browse or reload old ones with `rtco-aider-history`.
+# restored. Browse or reload old ones with `cyber-scopolamine-history`.
 restore-chat-history: true
 max-chat-history-tokens: 4096
 
@@ -30,8 +30,4 @@ dirty-commits: false
 # model-not-found error, which is harmless - pull them with
 # `ollama pull <name>` and rebuild the -agent variant to enable them.
 alias:
-  - "uncensored-big:ollama_chat/{{MODEL}}"
-  - "coder:ollama_chat/qwen2.5-coder-agent:latest"
-  - "big:ollama_chat/qwen2.5-coder-7b-agent:latest"
-  - "uncensored:ollama_chat/qwen2.5-abliterate-agent:latest"
-  - "uncensored-coder:ollama_chat/qwen2.5-coder-abliterate-agent:latest"
+  - "local:ollama_chat/{{MODEL}}"
